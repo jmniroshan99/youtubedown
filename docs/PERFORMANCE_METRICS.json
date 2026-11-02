@@ -1,0 +1,26 @@
+{
+  "date": "2026-11-02",
+  "baseline_version": "1.2.3",
+  "updated_version": "1.2.4",
+  "before": {
+    "initial_js_bytes": 549666,
+    "initial_js_gzip_level9_bytes": 160527,
+    "css_bytes": 32345,
+    "font_bytes": 48256,
+    "html_bytes": 1168
+  },
+  "after": {
+    "initial_js_bytes": 549666,
+    "initial_js_gzip_level9_bytes": 160527,
+    "css_bytes": 32345,
+    "font_bytes": 48256,
+    "html_bytes": 1168
+  },
+  "initial_js_files": [
+    "assets/index-DknxJU75.js",
+    "assets/feedback-D5oyDHmE.js",
+    "assets/supabase-Bwm3Z89P.js"
+  ],
+  "lighthouse": null,
+  "note": "File sizes only. Frontend behavior unchanged; displayed version label updated. No new browser network or Lighthouse measurement."
+}

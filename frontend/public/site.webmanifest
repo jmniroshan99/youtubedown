@@ -1,0 +1,25 @@
+{
+  "id": "/",
+  "name": "youtubedown",
+  "short_name": "youtubedown",
+  "description": "Paste a video link and save the prepared video to your device.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#111015",
+  "theme_color": "#c51f3d",
+  "icons": [
+    {
+      "src": "/icon-192.png?v=red-1",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png?v=red-1",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}

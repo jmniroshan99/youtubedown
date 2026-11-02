@@ -1,0 +1,226 @@
+amqp==5.4.1
+    # via
+    #   -c backend/requirements.txt
+    #   kombu
+annotated-doc==0.0.5
+    # via
+    #   -c backend/requirements.txt
+    #   fastapi
+annotated-types==0.8.0
+    # via
+    #   -c backend/requirements.txt
+    #   pydantic
+anyio==4.16.0
+    # via
+    #   -c backend/requirements.txt
+    #   httpx
+    #   starlette
+billiard==4.3.1
+    # via
+    #   -c backend/requirements.txt
+    #   celery
+brotli==1.2.1
+    # via
+    #   -c backend/requirements.txt
+    #   yt-dlp
+celery==5.6.3
+    # via
+    #   -c backend/requirements.txt
+    #   -r backend/requirements.in
+certifi==2026.10.23
+    # via
+    #   -c backend/requirements.txt
+    #   httpcore
+    #   httpx
+    #   requests
+    #   yt-dlp
+charset-normalizer==3.5.2
+    # via
+    #   -c backend/requirements.txt
+    #   requests
+click==8.5.0
+    # via
+    #   -c backend/requirements.txt
+    #   celery
+    #   click-didyoumean
+    #   click-plugins
+    #   click-repl
+    #   uvicorn
+click-didyoumean==0.3.1
+    # via
+    #   -c backend/requirements.txt
+    #   celery
+click-plugins==1.1.1.2
+    # via
+    #   -c backend/requirements.txt
+    #   celery
+click-repl==0.4.1
+    # via
+    #   -c backend/requirements.txt
+    #   celery
+fakeredis==2.40.0
+    # via -r backend/requirements-dev.in
+fastapi==0.162.0
+    # via
+    #   -c backend/requirements.txt
+    #   -r backend/requirements.in
+h11==0.16.0
+    # via
+    #   -c backend/requirements.txt
+    #   httpcore
+    #   uvicorn
+httpcore==1.0.9
+    # via
+    #   -c backend/requirements.txt
+    #   httpx
+httpx==0.28.1
+    # via
+    #   -c backend/requirements.txt
+    #   -r backend/requirements.in
+idna==3.20
+    # via
+    #   -c backend/requirements.txt
+    #   anyio
+    #   httpx
+    #   requests
+iniconfig==2.3.1
+    # via
+    #   -c backend/requirements.txt
+    #   pytest
+kombu==5.6.2
+    # via
+    #   -c backend/requirements.txt
+    #   celery
+lupa==2.8
+    # via fakeredis
+mutagen==1.48.1
+    # via
+    #   -c backend/requirements.txt
+    #   yt-dlp
+opentelemetry-api==1.45.2
+    # via
+    #   -c backend/requirements.txt
+    #   fastapi
+packaging==26.3
+    # via
+    #   -c backend/requirements.txt
+    #   kombu
+    #   pytest
+pluggy==1.7.0
+    # via
+    #   -c backend/requirements.txt
+    #   pytest
+prompt-toolkit==3.0.53
+    # via
+    #   -c backend/requirements.txt
+    #   click-repl
+pycryptodomex==3.24.1
+    # via
+    #   -c backend/requirements.txt
+    #   yt-dlp
+pydantic==2.14.2
+    # via
+    #   -c backend/requirements.txt
+    #   fastapi
+    #   pydantic-settings
+pydantic-core==2.50.2
+    # via
+    #   -c backend/requirements.txt
+    #   pydantic
+pydantic-settings==2.16.2
+    # via
+    #   -c backend/requirements.txt
+    #   -r backend/requirements.in
+pygments==2.21.0
+    # via
+    #   -c backend/requirements.txt
+    #   pytest
+pytest==9.2.0
+    # via
+    #   -c backend/requirements.txt
+    #   -r backend/requirements.in
+python-dateutil==4.0.0
+    # via
+    #   -c backend/requirements.txt
+    #   celery
+python-dotenv==1.2.4
+    # via
+    #   -c backend/requirements.txt
+    #   pydantic-settings
+redis==8.1.0
+    # via
+    #   -c backend/requirements.txt
+    #   -r backend/requirements.in
+    #   fakeredis
+requests==2.34.2
+    # via
+    #   -c backend/requirements.txt
+    #   yt-dlp
+ruff==0.17.3
+    # via
+    #   -c backend/requirements.txt
+    #   -r backend/requirements.in
+sortedcontainers==2.4.0
+    # via fakeredis
+starlette==1.10.0
+    # via
+    #   -c backend/requirements.txt
+    #   fastapi
+typing-extensions==4.16.0
+    # via
+    #   -c backend/requirements.txt
+    #   anyio
+    #   click-repl
+    #   fastapi
+    #   opentelemetry-api
+    #   pydantic
+    #   pydantic-core
+    #   pydantic-settings
+    #   starlette
+    #   typing-inspection
+typing-inspection==0.4.4
+    # via
+    #   -c backend/requirements.txt
+    #   fastapi
+    #   pydantic
+    #   pydantic-settings
+tzdata==2026.6
+    # via
+    #   -c backend/requirements.txt
+    #   kombu
+    #   python-dateutil
+tzlocal==5.4.5
+    # via
+    #   -c backend/requirements.txt
+    #   celery
+urllib3==2.8.0
+    # via
+    #   -c backend/requirements.txt
+    #   requests
+    #   yt-dlp
+uvicorn==0.54.0
+    # via
+    #   -c backend/requirements.txt
+    #   -r backend/requirements.in
+vine==5.1.0
+    # via
+    #   -c backend/requirements.txt
+    #   amqp
+    #   celery
+    #   kombu
+wcwidth==0.9.4
+    # via
+    #   -c backend/requirements.txt
+    #   prompt-toolkit
+websockets==17.4
+    # via
+    #   -c backend/requirements.txt
+    #   yt-dlp
+yt-dlp==2026.10.26
+    # via
+    #   -c backend/requirements.txt
+    #   -r backend/requirements.in
+yt-dlp-ejs==0.8.0
+    # via
+    #   -c backend/requirements.txt
+    #   yt-dlp

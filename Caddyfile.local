@@ -1,0 +1,19 @@
+{
+	admin off
+	auto_https off
+	persist_config off
+}
+:8080 {
+	header Cache-Control "private, no-store"
+	reverse_proxy api:8000 {
+		header_up X-Forwarded-For {remote_host}
+		transport http {
+			dial_timeout 5s
+			response_header_timeout 25s
+		}
+	}
+	handle_errors {
+		header Content-Type application/json
+		respond `{"status":"gateway_unavailable","error":{"code":"GATEWAY_UNAVAILABLE","message":"The local gateway cannot reach the API. Check the api container and run diagnose.bat."}}` 503
+	}
+}

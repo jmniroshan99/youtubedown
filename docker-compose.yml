@@ -1,0 +1,80 @@
+name: videoflow
+
+x-service: &service
+  build: ./backend
+  env_file: ./backend/.env
+  environment:
+    HTTP_PROXY: http://egress:8080
+    HTTPS_PROXY: http://egress:8080
+    NO_PROXY: redis,localhost,127.0.0.1
+    MEDIA_PROXY: http://egress:8080
+    REDIS_URL: redis://redis:6379/0
+  networks: [private]
+  read_only: true
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+  pids_limit: 160
+  restart: unless-stopped
+  init: true
+  depends_on:
+    redis:
+      condition: service_healthy
+    egress:
+      condition: service_started
+
+services:
+  api:
+    <<: *service
+    # Host ingress belongs to a separate gateway; keep this API internal-only.
+    mem_limit: 512m
+    cpus: 1
+    tmpfs: ["/tmp:size=64m,mode=1777"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health',timeout=12)"]
+      interval: 30s
+      timeout: 15s
+      retries: 3
+      start_period: 60s
+  worker:
+    <<: *service
+    command: ["celery", "-A", "app.queue:celery", "worker", "--loglevel=warning", "--concurrency=2", "--max-tasks-per-child=30"]
+    mem_limit: 2g
+    cpus: 2
+    tmpfs: ["/tmp:size=1600m,mode=1777"]
+  scheduler:
+    <<: *service
+    command: ["celery", "-A", "app.queue:celery", "beat", "--loglevel=warning", "--schedule=/tmp/celerybeat-schedule"]
+    mem_limit: 256m
+    tmpfs: ["/tmp:size=32m,mode=1777"]
+  redis:
+    image: redis:7.4-alpine
+    # Current jobs contain source metadata and are intentionally memory-only.
+    # Keep the existing volume identity for compatibility; do not write new AOF/RDB history.
+    command: ["redis-server", "--appendonly", "no", "--save", "", "--maxmemory", "256mb", "--maxmemory-policy", "noeviction"]
+    networks: [private]
+    volumes: [redis-data:/data]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+    mem_limit: 384m
+  egress:
+    build:
+      context: .
+      dockerfile: egress/Dockerfile
+    networks: [private, outbound]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 200
+    mem_limit: 256m
+    restart: unless-stopped
+
+networks:
+  private:
+    internal: true
+  outbound: {}
+volumes:
+  redis-data: {}
