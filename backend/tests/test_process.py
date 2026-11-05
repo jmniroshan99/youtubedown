@@ -25,8 +25,10 @@ def test_cancel_kills_process_and_cleans_directory(tmp_path):
     assert list(tmp_path.iterdir()) == []
 
 
-def test_media_child_never_inherits_server_secret(tmp_path, monkeypatch):
+def test_media_child_never_inherits_server_secret_or_parent_ca_overrides(tmp_path, monkeypatch):
     monkeypatch.setenv("SUPABASE_SECRET_KEY", "do-not-inherit")
+    monkeypatch.setenv("SSL_CERT_FILE", "/run/server-only-ca.pem")
+    monkeypatch.setenv("SSL_CERT_DIR", "/run/server-only-ca-directory")
     real_popen = subprocess.Popen
     captured = {}
 
@@ -38,6 +40,8 @@ def test_media_child_never_inherits_server_secret(tmp_path, monkeypatch):
     with patch("app.tasks.settings", return_value=config), patch("app.tasks.subprocess.Popen", side_effect=child):
         assert run_media({"mode": "analyze", "url": "https://example.com/v"}) == {"ok": True}
     assert "SUPABASE_SECRET_KEY" not in captured
+    assert "SSL_CERT_FILE" not in captured
+    assert "SSL_CERT_DIR" not in captured
     assert captured["HTTPS_PROXY"] == "http://egress:8080"
 
 

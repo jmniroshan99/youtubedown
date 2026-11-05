@@ -3,13 +3,35 @@ $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path -Parent $PSScriptRoot
 $frontendOrigin = 'https://youtubedownl.netlify.app'
 $composeArgs = @('compose', '-f', 'docker-compose.yml', '-f', 'docker-compose.local.yml', '-f', 'docker-compose.tunnel.yml')
+function Test-DockerEngine {
+    try {
+        $engineVersion = & docker version --format '{{.Server.Version}}' 2>$null
+        return ($LASTEXITCODE -eq 0 -and [bool]$engineVersion)
+    } catch { return $false }
+}
 Push-Location $projectRoot
 try {
     if (-not (Test-Path -LiteralPath 'backend/.env')) { throw 'Run the existing backend setup first. backend/.env is required.' }
+    if (-not (Get-Command docker -ErrorAction SilentlyContinue)) { throw 'Install Docker Desktop and run this script again.' }
+    if (-not (Test-DockerEngine)) {
+        $desktopPath = if ($env:ProgramFiles) { Join-Path $env:ProgramFiles 'Docker\Docker\Docker Desktop.exe' } else { $null }
+        if ($desktopPath -and (Test-Path -LiteralPath $desktopPath) -and
+            -not (Get-Process -Name 'Docker Desktop' -ErrorAction SilentlyContinue)) {
+            Write-Host 'Starting Docker Desktop for the PC backend.'
+            Start-Process -FilePath $desktopPath -WindowStyle Hidden
+        }
+        Write-Host 'Waiting for the Docker engine to become ready...'
+        $engineReady = $false
+        for ($attempt = 0; $attempt -lt 40; $attempt++) {
+            if (Test-DockerEngine) { $engineReady = $true; break }
+            Start-Sleep -Seconds 3
+        }
+        if (-not $engineReady) { throw 'Docker is not ready. Open Docker Desktop, resolve any startup prompt and run start-netlify-backend.bat again.' }
+    }
     Write-Host 'Starting the existing Docker backend and a temporary HTTPS testing tunnel.'
     if ($Rebuild) { & docker @composeArgs up -d --build --quiet-pull }
     else { & docker @composeArgs up -d --quiet-pull }
-    if ($LASTEXITCODE) { throw 'Docker startup failed. Keep Docker Desktop running and review the error above.' }
+    if ($LASTEXITCODE) { throw 'Backend services are not ready. Check the API database/worker connection and the error above before restarting the tunnel.' }
     $publicUrl = $null
     $retriedBootstrap = $false
     for ($attempt = 0; $attempt -lt 45; $attempt++) {
