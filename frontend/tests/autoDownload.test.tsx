@@ -63,6 +63,20 @@ async function analyze(view: ReturnType<typeof setup>) {
 }
 
 describe("choose before downloading", () => {
+  it.each([[900, "15 minutes"], [3600, "1 hour"]])("shows the server's %i-second duration ceiling without preparing a download", async (maxDuration, label) => {
+    const implementation = mocks.api.getMockImplementation()!;
+    mocks.api.mockImplementation(async (path: string, init?: RequestInit) => path === "/api/analyze/a1"
+      ? { status: "failed", error_code: "DURATION_LIMIT", error_stage: "analysis", download_limits: { max_bytes: 100_000, max_duration: maxDuration } }
+      : implementation(path, init));
+    const view = setup();
+    act(() => view.result.current.changeURL("https://example.com/v"));
+    await act(async () => view.result.current.run());
+    expect(view.result.current.phase).toBe("failed");
+    expect(view.result.current.error).toBe(`This video exceeds the current limit of ${label}. Choose a shorter video.`);
+    expect(view.result.current.diagnostic).toBe("Reference: DURATION_LIMIT · Stage: analysis");
+    expect(mocks.api.mock.calls.filter(([path]) => path === "/api/downloads")).toHaveLength(0);
+    expect(HTMLAnchorElement.prototype.click).not.toHaveBeenCalled();
+  });
   it("reports a session-stage network failure without starting analysis or creating a download", async () => {
     mocks.ensure.mockRejectedValueOnce(new SessionError("AUTH_NETWORK_ERROR"));
     const view = setup();

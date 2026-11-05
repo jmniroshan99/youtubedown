@@ -27,7 +27,7 @@ Pornhub's pinned upstream extractor manufactures age-verification cookies and ca
 |---|---|
 | Locked frontend dependencies | `npm ci` completed. Existing package-lock preserved. |
 | Frontend production build / ESLint | Passed. |
-| Frontend Vitest | 110 tests across 14 files passed, including TLS messages, missing-backend preflight, production hostname isolation, retired-tunnel/authentication URL migration and safe guest-session failures. |
+| Frontend Vitest | 119 tests across 14 files passed, including TLS messages, missing-backend preflight, production hostname isolation, retired-tunnel/authentication URL migration, safe guest-session failures and server-provided duration-limit guidance. |
 | Backend pytest | 275 tests passed under Linux/Python 3.12 with pinned dependencies and FFmpeg, including verified TLS diagnostic/error coverage. |
 | Backend Ruff | Passed, including new runtime and fixture coverage. |
 | Production Docker builds | API, worker, scheduler and guarded egress built successfully. Existing running services were not restarted by verification. |
@@ -58,6 +58,12 @@ The exact known typo now resolves to the existing `.supabase.co` project only on
 **Live Netlify browser verification passed after publication.** A fresh headless Chrome profile, with normal TLS verification, signed in as a new anonymous test guest (HTTP 200), submitted the permitted MediaElement sample for analysis (202), and displayed available formats. There were zero preparation requests before the explicit Download click. The deployed frontend reached the actual PC API, Redis/Celery worker, guarded source transfer, FFmpeg and private Storage; no identity override, fake broker or mocked media was used for this check.
 
 Chrome's download manager completed the MP4 (5,510,872 bytes) and explicit MP3 (1,204,905 bytes). Both suggested filenames started with `youtubedown - ` and used their actual extensions. Save file completed a second MP4 transfer with the same SHA-256 and did not create another job. Exactly two preparation jobs were created. The two test Storage objects were deleted and absence verified, their job records were forgotten, the synthetic anonymous Auth user was deleted, and local test media was removed. No existing user session or account was changed. This verifies the public sample flow on Chrome; it does not establish live YouTube/Pornhub/xHamster compatibility, OAuth-provider completion, Safari or physical-device saving. The earlier Unicode, ownership and expiry checks are described separately above.
+
+## Duration-limit follow-up
+
+The running API and Celery worker both report a 900-second guest limit and a 3,600-second signed-in account limit. Policy snapshots, retries, extraction checks and final FFprobe validation all use seconds and retain the strictest applicable limit. No duration-unit defect was found. The screenshot's truncated YouTube link does not establish its actual length, so an incorrect rejection of that particular video has not been reproduced.
+
+The frontend now displays the exact duration ceiling from the existing failed-analysis response (`download_limits.max_duration`), rather than hiding it behind "allowed duration." For example, a guest failure states "current limit of 15 minutes." The code and analysis stage remain visible. Missing, fractional, nonpositive, nonfinite, unsafe or nonnumeric limits retain safe generic guidance. No quota, account rule, environment setting, worker network or download behavior changed. Regression tests verify guest/account limits, exact seconds, safe fallback and zero preparation/browser-download attempts after rejection; production build, lint and all 119 frontend tests pass.
 
 ## Distribution contents
 

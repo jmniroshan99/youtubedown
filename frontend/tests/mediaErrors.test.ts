@@ -25,4 +25,58 @@ describe("source failure messages", () => {
     expect(mediaFailureMessage("SOURCE_TLS_ERROR")).toContain("administrator");
     expect(mediaFailureReference("SOURCE_TLS_ERROR", "analysis")).toBe("Reference: SOURCE_TLS_ERROR · Stage: analysis");
   });
+
+  it.each([
+    [900, "15 minutes"],
+    [3600, "1 hour"],
+    [901, "15 minutes 1 second"],
+  ])("shows the server duration limit of %i seconds", (max_duration, readable) => {
+    for (const stage of ["analysis", "download"] as const) {
+      const message = mediaFailureMessage("DURATION_LIMIT", stage, { max_duration });
+      expect(message).toContain(`current limit of ${readable}`);
+      expect(message).toContain("Choose a shorter video.");
+    }
+  });
+
+  it("keeps the original guidance when the duration limit is missing or invalid", () => {
+    const invalidLimits: unknown[] = [
+      undefined, null, {}, { max_duration: undefined }, { max_duration: null },
+      { max_duration: 0 }, { max_duration: -1 }, { max_duration: 1.5 },
+      { max_duration: NaN }, { max_duration: Infinity }, { max_duration: -Infinity },
+      { max_duration: Number.MAX_SAFE_INTEGER + 1 }, { max_duration: "900" },
+      { max_duration: "https://private.test/?token=secret" },
+      { max_duration: { toString: () => { throw new Error("Do not coerce provider values"); } } },
+    ];
+    for (const limits of invalidLimits) {
+      for (const stage of ["analysis", "download"] as const) {
+        expect(mediaFailureMessage("DURATION_LIMIT", stage, limits as { max_duration?: number } | null | undefined))
+          .toBe("This video exceeds the allowed duration. Choose a shorter video.");
+      }
+    }
+  });
+
+  it("reads only the numeric duration field rather than provider messages", () => {
+    const limits = {
+      max_duration: 900,
+      message: "private response https://private.test/?token=secret",
+    };
+    const message = mediaFailureMessage("DURATION_LIMIT", "analysis", limits);
+    expect(message).toContain("current limit of 15 minutes");
+    expect(message).not.toContain("private");
+    expect(message).not.toContain("token");
+    expect(message).not.toContain("https://");
+  });
+
+  it("does not change other failures when limits are present", () => {
+    for (const code of ["DURATION_UNKNOWN", "MEDIA_LIMIT", "FILE_TOO_LARGE", "SOURCE_UNAVAILABLE", "SOURCE_TLS_ERROR", "UNKNOWN_CODE"]) {
+      for (const stage of ["analysis", "download"] as const) {
+        expect(mediaFailureMessage(code, stage, { max_duration: 900 })).toBe(mediaFailureMessage(code, stage));
+      }
+    }
+  });
+
+  it("retains duration codes and processing stages", () => {
+    expect(mediaFailureReference("DURATION_LIMIT", "analysis")).toBe("Reference: DURATION_LIMIT · Stage: analysis");
+    expect(mediaFailureReference("DURATION_LIMIT", "validation")).toBe("Reference: DURATION_LIMIT · Stage: validation");
+  });
 });

@@ -42,7 +42,24 @@ export function mediaFailureReference(code?: string | null, stage = "analysis") 
   return `Reference: ${safeCode} · Stage: ${stages.has(stage) ? stage : "download"}`;
 }
 
-export function mediaFailureMessage(code: string | null | undefined, stage: MediaFailureStage = "analysis") {
+function durationLimitText(seconds: unknown) {
+  if (typeof seconds !== "number" || !Number.isSafeInteger(seconds) || seconds <= 0) return "";
+  const units = [
+    [Math.floor(seconds / 3600), "hour"],
+    [Math.floor((seconds % 3600) / 60), "minute"],
+    [seconds % 60, "second"],
+  ] as const;
+  return units.filter(([amount]) => amount > 0)
+    .map(([amount, unit]) => `${amount} ${unit}${amount === 1 ? "" : "s"}`).join(" ");
+}
+
+export function mediaFailureMessage(
+  code: string | null | undefined,
+  stage: MediaFailureStage = "analysis",
+  limits?: { max_duration?: number } | null,
+) {
+  const durationLimit = code === "DURATION_LIMIT" && durationLimitText(limits?.max_duration);
+  if (durationLimit) return `This video exceeds the current limit of ${durationLimit}. Choose a shorter video.`;
   if (code && Object.hasOwn(messages, code)) return messages[code];
   return stage === "analysis"
     ? "This page could not be analyzed. Try the video's direct link or another public source."

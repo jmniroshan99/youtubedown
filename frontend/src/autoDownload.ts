@@ -208,7 +208,7 @@ export function useAutoDownload() {
       signal.throwIfAborted();
       if (result.status !== "completed") {
         setDiagnostic(mediaFailureReference(result.error_code, result.error_stage ?? "analysis"));
-        throw new Error(mediaFailureMessage(result.error_code));
+        throw new Error(mediaFailureMessage(result.error_code, "analysis", result.download_limits));
       }
       setAnalysis(result);
       const nextKind = selectableFormats(result, "video").length ? "video" : "audio";
