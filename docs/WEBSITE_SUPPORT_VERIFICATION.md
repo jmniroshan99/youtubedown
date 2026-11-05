@@ -105,6 +105,8 @@ All 144 frontend tests, production build and ESLint passed after these changes. 
 
 No backend code, certificate trust, environment names, storage keys, dependencies, RLS or account records changed in this follow-up. The earlier 325-test backend baseline remains applicable. Full live Google/Facebook consent, email delivery and current download transfers remain unverified: they require the owner's hosted configuration and a ready backend. The user declined inspection-CA trust changes, and that choice remains in effect.
 
+Authentication/workflow commit `e662320` was pushed to GitHub `main`. The public Netlify bundles confirmed the new callback, token-bound recovery and cancellation handling. The same clean-Chrome route checks then passed on `https://youtubedownl.netlify.app`, again with zero page errors, account creations, emails, password writes or preparation requests. This confirms publication of the source fixes; the separate live diagnostic still reports the wrong hosted OAuth return and unavailable backend.
+
 ## Distribution contents
 
 `youtubedown_Website_Support_Updated.zip` contains complete source, existing npm/Python lockfiles, Windows scripts and English setup instructions. Packaging rejects actual local secret values and excludes `.env` files except examples, Git metadata, node_modules, virtual environments, caches, build output, diagnostic logs and downloaded media. Existing root Netlify configuration, styles/assets/fonts, Supabase migrations, environment names, auth keys, Docker identities and volumes are preserved. The user's pre-existing `.gitignore` edits were left intact.
