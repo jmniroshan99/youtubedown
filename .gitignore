@@ -21,3 +21,10 @@ diagnost
 !**/.env.*.example
 diagnostics.txt
 **/.netlify/
+node_modules/
+dist/
+.env
+.env.*
+!.env.example
+*.local
+.vercel/
