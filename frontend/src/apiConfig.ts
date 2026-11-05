@@ -1,6 +1,20 @@
 export const isLoopback = (host: string) =>
   ["localhost", "127.0.0.1", "[::1]"].includes(host);
 
+export function resolveSupabaseUrl(
+  configured: string,
+  development: boolean,
+  hostname: string,
+  deployment?: { hostname: string; supabaseUrl?: string; retiredSupabaseUrls?: string[] },
+) {
+  const clean = configured.trim().replace(/\/$/, "");
+  if (!development && deployment?.hostname === hostname && deployment.supabaseUrl &&
+      deployment.retiredSupabaseUrls?.includes(clean)) {
+    return deployment.supabaseUrl.trim().replace(/\/$/, "");
+  }
+  return clean;
+}
+
 // Only the bundled local HTTP backend uses the development proxy.
 export function localProxyTarget(base: string): string | undefined {
   try {

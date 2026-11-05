@@ -3,5 +3,9 @@
     "apiBaseUrl":  "https://perspectives-retention-promptly-promo.trycloudflare.com",
     "retiredApiBaseUrls":  [
                                "https://transform-trackback-analyzed-porcelain.trycloudflare.com"
-                           ]
+                           ],
+    "supabaseUrl":  "https://dxtucfijilmytkwrzsox.supabase.co",
+    "retiredSupabaseUrls":  [
+                                "https://dxtucfijilmytkwrzsox.supabase.c"
+                            ]
 }

@@ -18,6 +18,8 @@ Quick Tunnels stop working when their connector stops, support at most 200 in-fl
 
 After connecting Netlify, verify connection status, a real guest/account session and a permitted public-media preparation/download. Configure the exact production Supabase callback/reset URLs as documented in [SOCIAL_SIGN_IN.md](SOCIAL_SIGN_IN.md). A public health check alone does not prove the complete guest/download flow.
 
+The later clean-browser investigation found the deployed `VITE_SUPABASE_URL` ending in `.supabase.c`, which failed DNS during guest signup. The canonical public project address ends in `.supabase.co`. The frontend corrects only that recorded typo on this exact production host and shares the result with the SDK and OAuth validation. Set the existing Netlify variable to `https://dxtucfijilmytkwrzsox.supabase.co` when updating dashboard configuration. The tunnel startup preserves this public migration metadata; it does not store keys. Safe guest-authentication error codes now identify the `session` stage separately from source analysis.
+
 ## Verified during setup on 5 November 2026
 
 The first anonymous tunnel-creation request ended with EOF. One ordinary connector restart succeeded, issued a public hostname and registered an edge connection. Public verified HTTPS `/health` returned ready, the exact Netlify CORS preflight passed, an untrusted-origin preflight returned 400 and unauthenticated `/api/downloads` access returned 401. Rerunning the final start script preserved the API/worker/connector container IDs and the current URL. The merged Compose check confirmed that private service ports, worker networks and mandatory source egress stayed intact. No TLS checks were disabled.

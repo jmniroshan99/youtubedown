@@ -4,8 +4,9 @@ import { clsx, type ClassValue } from "clsx";
 import type { DatabaseSchema } from "./database.types";
 import { privateRequestSignal } from "./requestScope";
 import publicDeployment from "./publicDeployment.json";
+import { getSupabaseUrl } from "./publicConfig";
 export const cn = (...values: ClassValue[]) => clsx(values);
-const url = import.meta.env.VITE_SUPABASE_URL?.trim();
+const url = getSupabaseUrl();
 const key = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY?.trim();
 export const configurationError =
   !url || !key ? "Supabase configuration is missing." : "";

@@ -1,4 +1,6 @@
 import { z } from "zod";
+import { getSupabaseUrl } from "./publicConfig";
+import { sessionFailure } from "./sessionErrors";
 
 export type AuthMode = "login" | "register" | "forgot" | "reset";
 export type SocialProvider = "google" | "facebook";
@@ -44,7 +46,7 @@ export function clearCallbackAddress() {
 }
 
 export async function checkSocialProvider(provider: SocialProvider) {
-  const url = import.meta.env.VITE_SUPABASE_URL?.trim();
+  const url = getSupabaseUrl();
   const key = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY?.trim();
   if (!url || !key) throw new Error("Account sign-in is not configured. Please contact support or continue as a guest.");
   let response: Response;
@@ -62,7 +64,7 @@ export async function checkSocialProvider(provider: SocialProvider) {
 }
 
 export function redirectToProvider(url: string, provider: SocialProvider) {
-  const base = new URL(import.meta.env.VITE_SUPABASE_URL);
+  const base = new URL(getSupabaseUrl());
   const target = new URL(url);
   const expectedPath = base.pathname.replace(/\/$/, "") + "/auth/v1/authorize";
   if (target.origin !== base.origin || target.pathname !== expectedPath || target.username || target.password ||
@@ -72,7 +74,8 @@ export function redirectToProvider(url: string, provider: SocialProvider) {
 }
 
 export function friendlyAuthError(error: unknown, provider?: SocialProvider) {
-  const issue = error && typeof error === "object" ? error as { code?: string; status?: number; message?: string } : {};
+  const issue = error && typeof error === "object" ? error as { code?: string; name?: string; status?: number; message?: string } : {};
+  if (issue.name === "AuthRetryableFetchError") return sessionFailure(error).message;
   if (error instanceof TypeError || (error instanceof Error && error.name === "TimeoutError")) return "Cannot reach the sign-in service. Check your connection and try again.";
   if (issue.status && issue.status >= 500) return "The sign-in service is temporarily unavailable. Please try again shortly.";
   if (issue.status === 429) return "Too many attempts. Please wait a moment and try again.";

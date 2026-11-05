@@ -6,6 +6,7 @@ import { isAbort } from "./hooks";
 import { privateKey } from "./queryClient";
 import { savePreparedVideo } from "./downloadFile";
 import { mediaFailureMessage, mediaFailureReference } from "./mediaErrors";
+import { SessionError } from "./sessionErrors";
 
 export function videoURL(value: string) {
   try {
@@ -109,6 +110,7 @@ export function useAutoDownload() {
   const fail = useCallback((action: Action, exc: unknown) => {
     if (action.controller.signal.aborted || !mounted.current || current.current !== action) return;
     setError(errorMessage(exc));
+    if (exc instanceof SessionError) setDiagnostic(`Reference: ${exc.code} · Stage: session`);
     if (expiredRequest(exc)) {
       action.expired = true;
       if (action.job) { action.job = { ...action.job, status: "expired" }; setJob(action.job); }

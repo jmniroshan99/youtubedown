@@ -83,9 +83,20 @@ describe("guest session initialization", () => {
     });
     const { ensureGuestSession } = await import("../src/guestSession");
     await expect(ensureGuestSession(async () => undefined)).rejects.toThrow(
-      "Refresh failed",
+      "session could not be verified",
     );
     expect(mocks.signInAnonymously).not.toHaveBeenCalled();
+  });
+  it("classifies a rejected guest network call without keeping the failed initialization pending", async () => {
+    mocks.signInAnonymously.mockRejectedValueOnce(new TypeError("private fetch detail"));
+    const { ensureGuestSession } = await import("../src/guestSession");
+    await expect(ensureGuestSession(async () => undefined)).rejects.toMatchObject({ code: "AUTH_NETWORK_ERROR", stage: "session" });
+    await expect(ensureGuestSession(async () => undefined)).resolves.toBe(guest);
+  });
+  it("classifies SDK-returned fetch failures before any analysis request", async () => {
+    mocks.signInAnonymously.mockResolvedValueOnce({ data: {}, error: { name: "AuthRetryableFetchError", status: 0, message: "Failed to fetch private" } });
+    const { ensureGuestSession } = await import("../src/guestSession");
+    await expect(ensureGuestSession(async () => undefined)).rejects.toMatchObject({ code: "AUTH_NETWORK_ERROR", stage: "session" });
   });
   it("serializes guest creation and ordinary authentication actions", async () => {
     const { ensureGuestSession, runAuthAction } =

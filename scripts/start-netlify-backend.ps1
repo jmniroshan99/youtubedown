@@ -59,6 +59,7 @@ try {
     # tunnel values migrate, while other VITE_API_BASE_URL values stay primary.
     $deploymentPath = Join-Path $projectRoot 'frontend/src/publicDeployment.json'
     $retiredUrls = @()
+    $previous = $null
     if (Test-Path -LiteralPath $deploymentPath) {
         $previous = Get-Content -LiteralPath $deploymentPath -Raw | ConvertFrom-Json
         if ($previous.hostname -eq ([Uri]$frontendOrigin).Host) {
@@ -68,6 +69,10 @@ try {
         }
     }
     $deploymentConfig = [ordered]@{ hostname = ([Uri]$frontendOrigin).Host; apiBaseUrl = $publicUrl; retiredApiBaseUrls = @($retiredUrls) }
+    if ($previous -and $previous.hostname -eq ([Uri]$frontendOrigin).Host) {
+        if ($previous.supabaseUrl) { $deploymentConfig['supabaseUrl'] = $previous.supabaseUrl }
+        if ($previous.retiredSupabaseUrls) { $deploymentConfig['retiredSupabaseUrls'] = @($previous.retiredSupabaseUrls) }
+    }
     [System.IO.File]::WriteAllText($deploymentPath, (($deploymentConfig | ConvertTo-Json) + "`n"), (New-Object System.Text.UTF8Encoding($false)))
     Write-Host ''
     Write-Host 'PASS: public HTTPS health and exact-origin CORS checks.'

@@ -27,7 +27,7 @@ Pornhub's pinned upstream extractor manufactures age-verification cookies and ca
 |---|---|
 | Locked frontend dependencies | `npm ci` completed. Existing package-lock preserved. |
 | Frontend production build / ESLint | Passed. |
-| Frontend Vitest | 96 tests across 13 files passed, including TLS messages, missing-backend preflight, production fallback/hostname isolation and retired-tunnel migration. |
+| Frontend Vitest | 110 tests across 14 files passed, including TLS messages, missing-backend preflight, production hostname isolation, retired-tunnel/authentication URL migration and safe guest-session failures. |
 | Backend pytest | 275 tests passed under Linux/Python 3.12 with pinned dependencies and FFmpeg, including verified TLS diagnostic/error coverage. |
 | Backend Ruff | Passed, including new runtime and fixture coverage. |
 | Production Docker builds | API, worker, scheduler and guarded egress built successfully. Existing running services were not restarted by verification. |
@@ -49,6 +49,12 @@ Cross-owner file access returned 404; expired prepared-file access returned 410.
 
 **Limits:** The live harness overrides identity with generated owner IDs, uses isolated fakeredis, and invokes the real Celery task bodies synchronously. It does not verify a live Celery broker transaction, new Supabase login/OAuth, Netlify deployment, physical-device/browser save completion or Safari behavior. Browser workflow and download-anchor initiation are covered by frontend tests. HLS/DASH live internet sources were not tested; real local synthetic streams were. Availability can change independently of this application.
 
-## Distribution
+## Netlify authentication follow-up
+
+A clean Chrome session reproduced the deployed "Failed to fetch" error before API analysis started. The backend health request succeeded; the guest signup request targeted `dxtucfijilmytkwrzsox.supabase.c` and failed with `ERR_NAME_NOT_RESOLVED`. The deployed public key matched the existing project. This identifies a misspelled `VITE_SUPABASE_URL`, rather than a video extractor failure, for that screenshot.
+
+The exact known typo now resolves to the existing `.supabase.co` project only on the owned production hostname. Both the SDK and OAuth checks share that resolution; other projects, local development, auth storage and public-key settings remain explicit. Guest-session network, service, rate-limit and verification failures now show safe messages and a `session` stage reference, without exposing SDK/provider responses. A failed signup can be retried without starting an analysis or download job. Publication and a fresh live-browser check are the remaining verification steps for this follow-up.
+
+## Distribution contents
 
 `youtubedown_Website_Support_Updated.zip` contains complete source, existing npm/Python lockfiles, Windows scripts and English setup instructions. Packaging rejects actual local secret values and excludes `.env` files except examples, Git metadata, node_modules, virtual environments, caches, build output, diagnostic logs and downloaded media. Existing root Netlify configuration, styles/assets/fonts, Supabase migrations, environment names, auth keys, Docker identities and volumes are preserved. The user's pre-existing `.gitignore` edits were left intact.

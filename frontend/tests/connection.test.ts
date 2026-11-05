@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { QueryClient } from "@tanstack/react-query";
-import { localProxyTarget, resolveApiBase } from "../src/apiConfig";
+import { localProxyTarget, resolveApiBase, resolveSupabaseUrl } from "../src/apiConfig";
 import { serviceMessage } from "../src/serviceHealth";
 beforeEach(() => {
   vi.resetModules();
@@ -11,6 +11,18 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 describe("development connection routing", () => {
+  it("corrects only the recorded authentication-host typo on its owned production frontend", () => {
+    const authDeployment = { hostname: "site.netlify.app", supabaseUrl: "https://project.supabase.co", retiredSupabaseUrls: ["https://project.supabase.c"] };
+    expect(resolveSupabaseUrl("https://project.supabase.c/", false, "site.netlify.app", authDeployment)).toBe("https://project.supabase.co");
+    expect(resolveSupabaseUrl("https://project.supabase.c", true, "site.netlify.app", authDeployment)).toBe("https://project.supabase.c");
+    expect(resolveSupabaseUrl("https://project.supabase.c", false, "another.netlify.app", authDeployment)).toBe("https://project.supabase.c");
+  });
+  it("keeps other Supabase projects explicit and does not invent missing auth configuration", () => {
+    const authDeployment = { hostname: "site.netlify.app", supabaseUrl: "https://project.supabase.co", retiredSupabaseUrls: ["https://project.supabase.c"] };
+    expect(resolveSupabaseUrl("https://other.supabase.co", false, "site.netlify.app", authDeployment)).toBe("https://other.supabase.co");
+    expect(resolveSupabaseUrl("https://other.supabase.c", false, "site.netlify.app", authDeployment)).toBe("https://other.supabase.c");
+    expect(resolveSupabaseUrl("", false, "site.netlify.app", authDeployment)).toBe("");
+  });
   const deployment = { hostname: "site.netlify.app", apiBaseUrl: "https://public-api.example.test/" };
   it("uses the public deployment fallback for an unset production variable on its exact frontend host", () => {
     for (const empty of ["", "   "])

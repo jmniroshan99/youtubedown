@@ -8,6 +8,7 @@ vi.mock("../src/lib", () => ({ api: mocks.api, apiBase: "https://api.example.tes
 import { suggestedVideoFormat, useAutoDownload, videoURL } from "../src/autoDownload";
 import { createQueryClient } from "../src/queryClient";
 import type { Analysis, Format, Job } from "../src/lib";
+import { SessionError } from "../src/sessionErrors";
 const clients: ReturnType<typeof createQueryClient>[] = [];
 function setup() {
   const q = createQueryClient(); clients.push(q);
@@ -62,6 +63,17 @@ async function analyze(view: ReturnType<typeof setup>) {
 }
 
 describe("choose before downloading", () => {
+  it("reports a session-stage network failure without starting analysis or creating a download", async () => {
+    mocks.ensure.mockRejectedValueOnce(new SessionError("AUTH_NETWORK_ERROR"));
+    const view = setup();
+    act(() => view.result.current.changeURL("https://example.com/v"));
+    await act(async () => view.result.current.run());
+    expect(view.result.current.phase).toBe("failed");
+    expect(view.result.current.error).toContain("sign-in service");
+    expect(view.result.current.diagnostic).toBe("Reference: AUTH_NETWORK_ERROR · Stage: session");
+    expect(mocks.api).not.toHaveBeenCalled();
+    expect(HTMLAnchorElement.prototype.click).not.toHaveBeenCalled();
+  });
   it("reports an unconfigured hosted backend before starting guest authentication or network requests", async () => {
     mocks.checkApiBase.mockReturnValue("The download service has not been connected yet.");
     mocks.ensure.mockRejectedValue(new TypeError("Failed to fetch"));
