@@ -1,4 +1,7 @@
 {
     "hostname":  "youtubedownl.netlify.app",
-    "apiBaseUrl":  "https://perspectives-retention-promptly-promo.trycloudflare.com"
+    "apiBaseUrl":  "https://perspectives-retention-promptly-promo.trycloudflare.com",
+    "retiredApiBaseUrls":  [
+                               "https://transform-trackback-analyzed-porcelain.trycloudflare.com"
+                           ]
 }

@@ -55,9 +55,19 @@ try {
     @{ url = $publicUrl; frontend_origin = $frontendOrigin; created_at = [DateTime]::UtcNow.ToString('o') } |
         ConvertTo-Json | Set-Content -LiteralPath (Join-Path $runtimeRoot 'netlify-tunnel.json') -Encoding UTF8
     # This is public endpoint metadata, never credentials or source URLs.
-    # It applies only to this exact production hostname and is secondary to VITE_API_BASE_URL.
+    # It applies only to this exact production hostname; only known retired
+    # tunnel values migrate, while other VITE_API_BASE_URL values stay primary.
     $deploymentPath = Join-Path $projectRoot 'frontend/src/publicDeployment.json'
-    $deploymentConfig = [ordered]@{ hostname = ([Uri]$frontendOrigin).Host; apiBaseUrl = $publicUrl }
+    $retiredUrls = @()
+    if (Test-Path -LiteralPath $deploymentPath) {
+        $previous = Get-Content -LiteralPath $deploymentPath -Raw | ConvertFrom-Json
+        if ($previous.hostname -eq ([Uri]$frontendOrigin).Host) {
+            $retiredUrls = @(@($previous.apiBaseUrl) + @($previous.retiredApiBaseUrls) | Where-Object {
+                $_ -and $_ -ne $publicUrl -and $_ -match '^https://[a-z0-9-]+\.trycloudflare\.com$'
+            } | Select-Object -Unique -First 16)
+        }
+    }
+    $deploymentConfig = [ordered]@{ hostname = ([Uri]$frontendOrigin).Host; apiBaseUrl = $publicUrl; retiredApiBaseUrls = @($retiredUrls) }
     [System.IO.File]::WriteAllText($deploymentPath, (($deploymentConfig | ConvertTo-Json) + "`n"), (New-Object System.Text.UTF8Encoding($false)))
     Write-Host ''
     Write-Host 'PASS: public HTTPS health and exact-origin CORS checks.'

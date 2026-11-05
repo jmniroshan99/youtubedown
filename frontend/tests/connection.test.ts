@@ -19,6 +19,13 @@ describe("development connection routing", () => {
   it("keeps explicit environment configuration ahead of public deployment metadata", () => {
     expect(resolveApiBase("https://configured.example.test/", false, "site.netlify.app", deployment)).toBe("https://configured.example.test");
   });
+  it("migrates only a known retired tunnel on the exact production hostname", () => {
+    const migrated = { ...deployment, retiredApiBaseUrls: ["https://retired-api.example.test"] };
+    expect(resolveApiBase("https://retired-api.example.test/", false, "site.netlify.app", migrated)).toBe("https://public-api.example.test");
+    expect(resolveApiBase("https://retired-api.example.test", true, "site.netlify.app", migrated)).toBe("https://retired-api.example.test");
+    expect(resolveApiBase("https://retired-api.example.test", false, "another.netlify.app", migrated)).toBe("https://retired-api.example.test");
+    expect(resolveApiBase("https://configured.example.test", false, "site.netlify.app", migrated)).toBe("https://configured.example.test");
+  });
   it("does not send local-development or another site's sessions to the deployment fallback", () => {
     expect(resolveApiBase("", true, "site.netlify.app", deployment)).toBe("");
     expect(resolveApiBase("", false, "another.netlify.app", deployment)).toBe("");
