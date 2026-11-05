@@ -2,6 +2,8 @@
 
 To publish the frontend from GitHub, follow [Netlify + GitHub deployment](docs/NETLIFY_GITHUB_DEPLOY.md). The repository already includes the required root `netlify.toml`; downloads also require the separately hosted public HTTPS backend.
 
+For the selected free/no-card setup using this PC, run `start-netlify-backend.bat` and follow [PC backend tunnel setup](docs/PC_BACKEND_TUNNEL.md). Keep the PC and Docker running; the temporary URL printed by the script belongs in Netlify's existing `VITE_API_BASE_URL` variable. `stop-netlify-backend.bat` closes public tunnel access.
+
 Website support update (5 November 2026): see [English setup](docs/WEBSITE_SUPPORT_SETUP.md) and the [current verification report](docs/WEBSITE_SUPPORT_VERIFICATION.md). The tested yt-dlp pin remains 2026.10.26. Run `verify-website-support.bat` for the isolated Linux backend checks and locked frontend build/tests. Earlier release notes below are retained for context.
 
 Paste a supported video link, choose **Video** or **Audio** and its quality, then select **Download**. Save the result as **youtubedown - Video Title.mp4** or the chosen audio extension. Guest access does not require an email or password. The modern red play/download icon, crimson accents, warm-white light theme and charcoal dark theme share one visual system. Inter, optional accounts and private ownership checks are retained.

@@ -2,9 +2,9 @@ import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
 import { QueryClientProvider } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-const mocks = vi.hoisted(() => ({ api: vi.fn(), ensure: vi.fn() }));
+const mocks = vi.hoisted(() => ({ api: vi.fn(), ensure: vi.fn(), checkApiBase: vi.fn() }));
 vi.mock("../src/context", () => ({ useApp: () => ({ ensureSession: mocks.ensure }) }));
-vi.mock("../src/lib", () => ({ api: mocks.api, errorMessage: (e: Error) => e.message }));
+vi.mock("../src/lib", () => ({ api: mocks.api, apiBase: "https://api.example.test", checkApiBase: mocks.checkApiBase, errorMessage: (e: Error) => e.message }));
 import { suggestedVideoFormat, useAutoDownload, videoURL } from "../src/autoDownload";
 import { createQueryClient } from "../src/queryClient";
 import type { Analysis, Format, Job } from "../src/lib";
@@ -17,6 +17,7 @@ const format: Format = { id: "v720", label: "720p MP4", kind: "video", ext: "mp4
 const analysis: Analysis = { analysis_id: "a1", status: "completed", title: "Fixture", platform: "Test", duration: 10, formats: [format, { id: "a-mp3", label: "MP3 · 192 kbps", kind: "audio", ext: "mp3", size: 512 }], download_limits: { max_bytes: 100_000, max_duration: 900 } };
 const job: Job = { id: "job1", status: "completed", title: "Fixture", platform: "Test", selected_format: "720p MP4", source_url: "https://example.com/v", created_at: "2026-01-01T00:00:00Z", progress: 100 };
 beforeEach(() => {
+  mocks.checkApiBase.mockReset().mockReturnValue("");
   Object.defineProperty(document, "hidden", { configurable: true, value: false });
   mocks.ensure.mockReset().mockResolvedValue({ user: { id: "guest1" } });
   mocks.api.mockReset().mockImplementation(async (path: string) => {
@@ -61,6 +62,18 @@ async function analyze(view: ReturnType<typeof setup>) {
 }
 
 describe("choose before downloading", () => {
+  it("reports an unconfigured hosted backend before starting guest authentication or network requests", async () => {
+    mocks.checkApiBase.mockReturnValue("The download service has not been connected yet.");
+    mocks.ensure.mockRejectedValue(new TypeError("Failed to fetch"));
+    const view = setup();
+    act(() => view.result.current.changeURL("https://example.com/v"));
+    await act(async () => view.result.current.run());
+    expect(view.result.current.phase).toBe("failed");
+    expect(view.result.current.error).toBe("The download service has not been connected yet.");
+    expect(mocks.ensure).not.toHaveBeenCalled();
+    expect(mocks.api).not.toHaveBeenCalled();
+    expect(HTMLAnchorElement.prototype.click).not.toHaveBeenCalled();
+  });
   it("explains a restricted source without exposing internal codes or creating a download", async () => {
     const implementation = mocks.api.getMockImplementation()!;
     mocks.api.mockImplementation(async (path: string, init?: RequestInit) => path === "/api/analyze/a1"

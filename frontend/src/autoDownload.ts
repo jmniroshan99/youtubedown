@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useApp } from "./context";
-import { api, errorMessage, type Analysis, type Format, type Job } from "./lib";
+import { api, apiBase, checkApiBase, errorMessage, type Analysis, type Format, type Job } from "./lib";
 import { isAbort } from "./hooks";
 import { privateKey } from "./queryClient";
 import { savePreparedVideo } from "./downloadFile";
@@ -184,6 +184,8 @@ export function useAutoDownload() {
     const signal = action.controller.signal;
     setAnalysis(undefined); setAnalysisId(""); setJob(undefined); setSelected(""); setError(""); setDiagnostic(""); setNote(""); setDownloadStarted(false); setPhase("starting");
     try {
+      const configurationError = checkApiBase(apiBase);
+      if (configurationError) throw new Error(configurationError);
       await ensure.current();
       signal.throwIfAborted();
       setPhase("analyzing");

@@ -27,7 +27,7 @@ Pornhub's pinned upstream extractor manufactures age-verification cookies and ca
 |---|---|
 | Locked frontend dependencies | `npm ci` completed. Existing package-lock preserved. |
 | Frontend production build / ESLint | Passed. |
-| Frontend Vitest | 91 tests across 13 files passed, including the source TLS message. |
+| Frontend Vitest | 92 tests across 13 files passed, including the source TLS message and missing-backend preflight before guest authentication. |
 | Backend pytest | 275 tests passed under Linux/Python 3.12 with pinned dependencies and FFmpeg, including verified TLS diagnostic/error coverage. |
 | Backend Ruff | Passed, including new runtime and fixture coverage. |
 | Production Docker builds | API, worker, scheduler and guarded egress built successfully. Existing running services were not restarted by verification. |

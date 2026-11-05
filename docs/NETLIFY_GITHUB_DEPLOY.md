@@ -38,6 +38,8 @@ Never add `SUPABASE_SECRET_KEY`, service-role credentials, Redis credentials, OA
 
 ## 3. Keep the backend separately hosted
 
+For the selected free/no-card setup using the current PC, see [PC_BACKEND_TUNNEL.md](PC_BACKEND_TUNNEL.md). [FREE_BACKEND_HOSTING.md](FREE_BACKEND_HOSTING.md) also records conditional cloud-host alternatives; no paid resources have been provisioned.
+
 This repository's FastAPI API, Celery worker, scheduler, Redis and guarded egress are separate long-running Docker services. The Netlify Vite build does not run that Compose stack. A frontend deployment alone does not make media analysis, preparation or downloads available.
 
 Host the existing backend stack on an appropriate Docker host with persistent service operation, adequate temporary media resources, a domain and HTTPS. Preserve its existing `backend/.env`, secret names, private network, guarded egress and private Storage setup. The existing production deployment command is:
