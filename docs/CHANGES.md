@@ -1,10 +1,12 @@
 # youtubedown 1.5.0 — Easy accounts and clearer processing
 
+5 November follow-up: OAuth callbacks now terminate safely for missing sessions and unexchanged PKCE codes; password recovery is tied to the SDK recovery session, and unknown provider responses stay private. Cancel/Retry handles late responses, ambiguous mutations and completion races without duplicating preparation. `diagnose-auth.bat` checks public provider flags, its own cancellation return and public backend readiness. The current hosted Google flow reaches Google's sign-in page but returns cancellation to localhost; the owner must correct Supabase URL Configuration. Full live consent and current downloads remain unverified while that configuration and backend HTTPS readiness are unresolved. Existing trust settings remain unchanged.
+
 Registration now has four fields: **Full name**, **Email address**, **Password**, and **Confirm password**. Validation checks the name, email, password and matching confirmation. Only the password required by Supabase is submitted; the confirmation is not retained. The name is display metadata and never grants a role.
 
 Login and registration include **Continue with Google** and **Continue with Facebook** using Supabase OAuth/PKCE. Account confirmation, provider cancellation, disabled providers, sign-in errors and safe local return paths are handled explicitly. Guest access remains available; switching to a separate account does not transfer guest jobs.
 
-A read-only check of the project's public Auth settings found Google and Facebook disabled, email sign-in enabled, registration allowed and email confirmation required. No hosted setting, account or credential was changed. Social sign-in becomes usable after the owner configures and enables those providers. Follow [SOCIAL_SIGN_IN.md](SOCIAL_SIGN_IN.md) for the exact provider/frontend callbacks and email-delivery setup.
+The original 2 November public-settings check found Google and Facebook disabled. A fresh 5 November check shows both enabled, alongside email and guest sign-in; email confirmation remains required. No hosted setting, account or credential was changed by the source update. Follow [SOCIAL_SIGN_IN.md](SOCIAL_SIGN_IN.md) for the exact provider/frontend callbacks and email-delivery setup.
 
 Public source URLs not present in the registry can use yt-dlp's supported-source detection. Explicit disabled-source rules still take priority. This broadens supported public sources; it does not support every website, private content, login-only sources or DRM. Unknown, blocked, restricted, unavailable and rate-limited sources receive safe errors rather than raw extractor diagnostics.
 

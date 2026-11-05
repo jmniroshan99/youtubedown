@@ -197,6 +197,76 @@ describe("choose before downloading", () => {
     expect(bodies[0].idempotency_key).toBe(bodies[1].idempotency_key);
     expect(mocks.api.mock.calls.filter(([p]) => p === "/api/analyze")).toHaveLength(1);
   });
+  it("retains retry idempotency after an ambiguous retry response", async () => {
+    const implementation = mocks.api.getMockImplementation()!;
+    let attempts = 0;
+    mocks.api.mockImplementation(async (path: string, init?: RequestInit) => {
+      if (path === "/api/downloads") return { ...job, status: "failed", error_code: "SOURCE_NETWORK_ERROR" };
+      if (path === "/api/downloads/job1/retry") {
+        if (++attempts === 1) throw new Error("Retry response interrupted");
+        return { ...job, id: "job2" };
+      }
+      return implementation(path, init);
+    });
+    const view = setup();
+    await analyze(view);
+    await act(async () => view.result.current.prepareSelected());
+    await act(async () => view.result.current.retry());
+    expect(view.result.current.phase).toBe("failed");
+    await act(async () => view.result.current.retry());
+    const requests = mocks.api.mock.calls.filter(([path]) => path.endsWith("/retry"));
+    expect(requests).toHaveLength(2);
+    expect(JSON.parse(requests[0][1].body).idempotency_key).toBe(JSON.parse(requests[1][1].body).idempotency_key);
+    expect(view.result.current.job?.id).toBe("job2");
+    expect(view.result.current.downloadStarted).toBe(true);
+    expect(mocks.api.mock.calls.filter(([path]) => path === "/api/downloads")).toHaveLength(1);
+  });
+  it("uses a fresh retry key after an acknowledged retry produces another failed job", async () => {
+    const implementation = mocks.api.getMockImplementation()!;
+    mocks.api.mockImplementation(async (path: string, init?: RequestInit) => {
+      if (path === "/api/downloads") return { ...job, status: "failed", error_code: "SOURCE_NETWORK_ERROR" };
+      if (path === "/api/downloads/job1/retry") return { ...job, id: "job2", status: "failed", error_code: "SOURCE_NETWORK_ERROR" };
+      if (path === "/api/downloads/job2/retry") return { ...job, id: "job3" };
+      return implementation(path, init);
+    });
+    const view = setup();
+    await analyze(view);
+    await act(async () => view.result.current.prepareSelected());
+    await act(async () => view.result.current.retry());
+    expect(view.result.current.job?.id).toBe("job2");
+    expect(view.result.current.phase).toBe("failed");
+    await act(async () => view.result.current.retry());
+    const requests = mocks.api.mock.calls.filter(([path]) => path.endsWith("/retry"));
+    expect(requests.map(([path]) => path)).toEqual(["/api/downloads/job1/retry", "/api/downloads/job2/retry"]);
+    expect(JSON.parse(requests[0][1].body).idempotency_key).not.toBe(JSON.parse(requests[1][1].body).idempotency_key);
+    expect(view.result.current.job?.id).toBe("job3");
+    expect(view.result.current.downloadStarted).toBe(true);
+    expect(mocks.api.mock.calls.filter(([path]) => path === "/api/downloads")).toHaveLength(1);
+  });
+  it("resumes an existing active job after a polling failure without creating or retrying a job", async () => {
+    const implementation = mocks.api.getMockImplementation()!;
+    let polls = 0;
+    mocks.api.mockImplementation(async (path: string, init?: RequestInit) => {
+      if (path === "/api/downloads") return { ...job, status: "queued", progress: null };
+      if (path === "/api/downloads/job1") {
+        if (++polls === 1) throw new Error("Polling connection interrupted");
+        return job;
+      }
+      return implementation(path, init);
+    });
+    const view = setup();
+    await analyze(view);
+    await act(async () => view.result.current.prepareSelected());
+    expect(view.result.current.phase).toBe("failed");
+    expect(view.result.current.job?.status).toBe("queued");
+    await act(async () => view.result.current.retry());
+    expect(view.result.current.phase).toBe("completed");
+    expect(view.result.current.downloadStarted).toBe(true);
+    expect(polls).toBe(2);
+    expect(mocks.api.mock.calls.filter(([path]) => path.endsWith("/retry"))).toHaveLength(0);
+    expect(mocks.api.mock.calls.filter(([path]) => path === "/api/downloads")).toHaveLength(1);
+    expect(HTMLAnchorElement.prototype.click).toHaveBeenCalledOnce();
+  }, 10000);
   it("aborts stale analysis on replacement input before it can create a job", async () => {
     let settle!: (value: unknown) => void;
     const implementation = mocks.api.getMockImplementation()!;
@@ -219,6 +289,86 @@ describe("choose before downloading", () => {
     await new Promise((resolve) => setTimeout(resolve, 700));
     expect(mocks.api).not.toHaveBeenCalled();
     expect(view.result.current.phase).toBe("cancelled");
+  });
+  it.each(["success", "error"])("ignores a late cancellation %s after a replacement link has been analyzed", async (outcome) => {
+    const implementation = mocks.api.getMockImplementation()!;
+    let settle!: (value: unknown) => void;
+    let reject!: (error: Error) => void;
+    let cancellations = 0;
+    mocks.api.mockImplementation(async (path: string, init?: RequestInit) => {
+      if (path === "/api/downloads") return { ...job, status: "downloading", progress: 10 };
+      if (path === "/api/downloads/job1/cancel" && ++cancellations === 1)
+        return new Promise((resolve, fail) => { settle = resolve; reject = fail; });
+      return implementation(path, init);
+    });
+    const view = setup();
+    await analyze(view);
+    let preparing!: Promise<void>;
+    act(() => { preparing = view.result.current.prepareSelected(); });
+    await waitFor(() => expect(view.result.current.job?.status).toBe("downloading"));
+    let cancelling!: Promise<void>;
+    act(() => { cancelling = view.result.current.cancel(); });
+    await act(async () => { await preparing; });
+    expect(settle).toBeDefined();
+    act(() => view.result.current.changeURL("https://example.com/replacement"));
+    await act(async () => view.result.current.run());
+    expect(view.result.current.phase).toBe("choose");
+    await act(async () => {
+      if (outcome === "success") settle({ status: "cancelled" });
+      else reject(new Error("The old cancellation failed."));
+      await cancelling;
+    });
+    expect(view.result.current.url).toBe("https://example.com/replacement");
+    expect(view.result.current.phase).toBe("choose");
+    expect(view.result.current.analysis).toBe(analysis);
+    expect(view.result.current.job).toBeUndefined();
+    expect(view.result.current.error).toBe("");
+    expect(mocks.api.mock.calls.filter(([path]) => path === "/api/downloads")).toHaveLength(1);
+    expect(HTMLAnchorElement.prototype.click).not.toHaveBeenCalled();
+  });
+  it("retries an acknowledged cancelled job instead of resuming its old active status", async () => {
+    const implementation = mocks.api.getMockImplementation()!;
+    mocks.api.mockImplementation(async (path: string, init?: RequestInit) => {
+      if (path === "/api/downloads") return { ...job, status: "downloading", progress: 10 };
+      if (path === "/api/downloads/job1/retry") return { ...job, id: "job2" };
+      return implementation(path, init);
+    });
+    const view = setup();
+    await analyze(view);
+    let preparing!: Promise<void>;
+    act(() => { preparing = view.result.current.prepareSelected(); });
+    await waitFor(() => expect(view.result.current.job?.status).toBe("downloading"));
+    await act(async () => { await view.result.current.cancel(); await preparing; });
+    expect(view.result.current.job?.status).toBe("cancelled");
+    await act(async () => view.result.current.retry());
+    expect(mocks.api.mock.calls.filter(([path]) => path === "/api/downloads/job1/retry")).toHaveLength(1);
+    expect(view.result.current.job?.id).toBe("job2");
+    expect(view.result.current.downloadStarted).toBe(true);
+  });
+  it("keeps a file ready for Save when the worker finishes before cancellation", async () => {
+    const implementation = mocks.api.getMockImplementation()!;
+    mocks.api.mockImplementation(async (path: string, init?: RequestInit) => {
+      if (path === "/api/downloads") return { ...job, status: "downloading", progress: 10 };
+      if (path === "/api/downloads/job1/cancel") return { status: "completed" };
+      return implementation(path, init);
+    });
+    const view = setup();
+    await analyze(view);
+    let preparing!: Promise<void>;
+    act(() => { preparing = view.result.current.prepareSelected(); });
+    await waitFor(() => expect(view.result.current.job?.status).toBe("downloading"));
+    await act(async () => { await view.result.current.cancel(); await preparing; });
+    expect(view.result.current.phase).toBe("completed");
+    expect(view.result.current.job?.status).toBe("completed");
+    expect(view.result.current.error).toBe("");
+    expect(view.result.current.note).toContain("finished before cancellation");
+    expect(view.result.current.downloadStarted).toBe(false);
+    expect(HTMLAnchorElement.prototype.click).not.toHaveBeenCalled();
+    await act(async () => view.result.current.save());
+    expect(view.result.current.downloadStarted).toBe(true);
+    expect(HTMLAnchorElement.prototype.click).toHaveBeenCalledOnce();
+    expect(mocks.api.mock.calls.filter(([path]) => path === "/api/downloads")).toHaveLength(1);
+    expect(mocks.api.mock.calls.filter(([path]) => path.endsWith("/retry"))).toHaveLength(0);
   });
   it("keeps a completed job ready when automatic link retrieval fails, allowing one-click save", async () => {
     const implementation = mocks.api.getMockImplementation()!;

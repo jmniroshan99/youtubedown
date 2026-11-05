@@ -242,8 +242,19 @@ export function useAutoDownload() {
     if (action?.job && active.has(action.job.status)) {
       try {
         const result = await api<{ status: string }>(`/api/downloads/${action.job.id}/cancel`, { method: "POST" });
-        if (mounted.current) setJob({ ...action.job, status: result.status });
-      } catch (exc) { if (mounted.current) setError(errorMessage(exc)); }
+        if (mounted.current && current.current === action) {
+          action.job = { ...action.job, status: result.status };
+          if (result.status === "completed") {
+            // The worker may finish before cancellation reaches it. Give Save
+            // a fresh lifetime, while the aborted polling action stays stale.
+            current.current = { ...action, controller: new AbortController(), preparing: false };
+            setPhase("completed");
+            setDownloadStarted(false);
+            setNote("The file finished before cancellation. Select Save file to start its browser download.");
+          }
+          setJob(action.job);
+        }
+      } catch (exc) { if (mounted.current && current.current === action) setError(errorMessage(exc)); }
     }
   }, []);
 
@@ -271,11 +282,16 @@ export function useAutoDownload() {
     old.retryKey = action.retryKey;
     action.preparing = true;
     current.current = action;
-    setError(""); setDownloadStarted(false); setPhase("creating");
+    setError(""); setDownloadStarted(false); setPhase(active.has(old.job.status) ? old.job.status : "creating");
     try {
       const session = await ensure.current();
       action.controller.signal.throwIfAborted();
-      const next = await api<Job>(`/api/downloads/${old.job.id}/retry`, { method: "POST", signal: action.controller.signal, body: JSON.stringify({ idempotency_key: action.retryKey }) });
+      // Reconnect to an acknowledged active job after a polling failure. A new
+      // retry request is valid only once that job has actually settled.
+      const next = active.has(old.job.status) ? old.job : await api<Job>(`/api/downloads/${old.job.id}/retry`, { method: "POST", signal: action.controller.signal, body: JSON.stringify({ idempotency_key: action.retryKey }) });
+      // The mutation is now acknowledged. A later retry of its failed child
+      // needs a new key; an ambiguous failure above retains the current key.
+      action.retryKey = undefined;
       await follow(action, next, session.user.id);
     } catch (exc) { fail(action, exc); }
     finally { action.preparing = false; }

@@ -30,7 +30,7 @@ Install Node.js 24 and Docker Desktop with WSL 2. Keep Docker Desktop running.
 
 ## Create accounts
 
-Use Create account for the four-field email form, or Continue with Google/Facebook after enabling those providers. Follow [docs/SOCIAL_SIGN_IN.md](docs/SOCIAL_SIGN_IN.md) for provider console settings and callback URLs. Google/Facebook are currently disabled in the checked project; no new VITE secret is required. Preserve email confirmation and configure production email delivery.
+Use Create account for the four-field email form, or Continue with Google/Facebook after configuring those providers. Follow [docs/SOCIAL_SIGN_IN.md](docs/SOCIAL_SIGN_IN.md) for provider console settings and exact production callback URLs. Google/Facebook are enabled in the 5 November check, but a diagnostic cancellation returned to localhost, so the owner must correct Supabase URL Configuration. Run `diagnose-auth.bat` to check the return path and backend health. No new VITE secret is required. Preserve email confirmation and configure production email delivery.
 
 ## Download behavior
 

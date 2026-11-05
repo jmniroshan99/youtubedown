@@ -6,6 +6,30 @@ export type AuthMode = "login" | "register" | "forgot" | "reset";
 export type SocialProvider = "google" | "facebook";
 export const providerName = (provider: SocialProvider) => provider === "google" ? "Google" : "Facebook";
 
+const flowMessages = {
+  AUTH_NOT_CONFIGURED: "Account sign-in is not configured. Please contact support or continue as a guest.",
+  AUTH_UNAVAILABLE: "The sign-in service is temporarily unavailable. Please try again shortly.",
+  AUTH_SESSION_MISSING: "A sign-in session could not be started. Please try again.",
+  AUTH_REDIRECT_INVALID: "The sign-in service returned an invalid address. Please try again.",
+  AUTH_RESPONSE_INVALID: "The sign-in service returned an invalid response. Please try again.",
+  CALLBACK_SESSION_MISSING: "No signed-in account was returned. Try signing in again or continue as a guest.",
+  CALLBACK_LINK_INVALID: "This sign-in link could not be verified. Start sign-in again in this browser.",
+  RECOVERY_LINK_INVALID: "This password reset link could not be verified. Request a new link and open it in this browser.",
+  RECOVERY_SESSION_CHANGED: "Your password reset session changed. Request a new reset link before continuing.",
+  GOOGLE_UNAVAILABLE: "Google sign-in is not available yet. Use email or continue as a guest.",
+  FACEBOOK_UNAVAILABLE: "Facebook sign-in is not available yet. Use email or continue as a guest.",
+  GOOGLE_START_FAILED: "Google sign-in could not be started. Please try again.",
+  FACEBOOK_START_FAILED: "Facebook sign-in could not be started. Please try again.",
+};
+
+export class AuthFlowError extends Error {
+  constructor(public readonly code: keyof typeof flowMessages) { super(flowMessages[code]); }
+}
+
+export function unconsumedCallbackCode() {
+  return new URL(window.location.href).searchParams.has("code");
+}
+
 export function authSchema(mode: AuthMode) {
   return z.object({ fullName: z.string(), email: z.string(), password: z.string(), confirmPassword: z.string() })
     .superRefine((value, context) => {
@@ -48,7 +72,7 @@ export function clearCallbackAddress() {
 export async function checkSocialProvider(provider: SocialProvider) {
   const url = getSupabaseUrl();
   const key = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY?.trim();
-  if (!url || !key) throw new Error("Account sign-in is not configured. Please contact support or continue as a guest.");
+  if (!url || !key) throw new AuthFlowError("AUTH_NOT_CONFIGURED");
   let response: Response;
   try {
     response = await fetch(url.replace(/\/$/, "") + "/auth/v1/settings", {
@@ -56,11 +80,11 @@ export async function checkSocialProvider(provider: SocialProvider) {
     });
     if (!response.ok) throw new Error("unavailable");
   } catch {
-    throw new Error("The sign-in service is temporarily unavailable. Please try again shortly.");
+    throw new AuthFlowError("AUTH_UNAVAILABLE");
   }
   const settings = await response.json().catch(() => ({}));
   if (settings?.external?.[provider] === false)
-    throw new Error(`${providerName(provider)} sign-in is not available yet. Use email or continue as a guest.`);
+    throw new AuthFlowError(provider === "google" ? "GOOGLE_UNAVAILABLE" : "FACEBOOK_UNAVAILABLE");
 }
 
 export function redirectToProvider(url: string, provider: SocialProvider) {
@@ -69,11 +93,12 @@ export function redirectToProvider(url: string, provider: SocialProvider) {
   const expectedPath = base.pathname.replace(/\/$/, "") + "/auth/v1/authorize";
   if (target.origin !== base.origin || target.pathname !== expectedPath || target.username || target.password ||
       target.searchParams.get("provider") !== provider || target.searchParams.get("redirect_to") !== window.location.origin + "/auth/callback")
-    throw new Error("The sign-in service returned an invalid address. Please try again.");
+    throw new AuthFlowError("AUTH_REDIRECT_INVALID");
   window.location.assign(target.href);
 }
 
 export function friendlyAuthError(error: unknown, provider?: SocialProvider) {
+  if (error instanceof AuthFlowError) return error.message;
   const issue = error && typeof error === "object" ? error as { code?: string; name?: string; status?: number; message?: string } : {};
   if (issue.name === "AuthRetryableFetchError") return sessionFailure(error).message;
   if (error instanceof TypeError || (error instanceof Error && error.name === "TimeoutError")) return "Cannot reach the sign-in service. Check your connection and try again.";
@@ -81,8 +106,14 @@ export function friendlyAuthError(error: unknown, provider?: SocialProvider) {
   if (issue.status === 429) return "Too many attempts. Please wait a moment and try again.";
   if (issue.code === "invalid_credentials") return "Check your email and password and try again.";
   if (issue.code === "weak_password") return "This password does not meet the account requirements. Choose a stronger password.";
+  if (issue.code === "email_not_confirmed") return "Confirm your email address using the link in your inbox, then sign in again.";
+  if (issue.code === "signup_disabled") return "New account registration is not available. Use an existing account or continue as a guest.";
+  if (issue.code === "same_password") return "Choose a password different from your current password.";
+  if (issue.code === "email_address_not_authorized") return "Email delivery is not configured for this address. Please contact support.";
   if (issue.code === "captcha_failed") return "Verification failed. Please try again.";
   if (provider && (issue.code === "provider_disabled" || /unsupported provider|provider.*not enabled/i.test(issue.message || "")))
     return `${providerName(provider)} sign-in is not available yet. Use email or continue as a guest.`;
-  return error instanceof Error ? error.message : "Sign-in could not be completed. Please try again.";
+  if (issue.name === "AbortError" || issue.message === "Verification was cancelled. You can try again." || issue.message === "Verification was cancelled.")
+    return "Verification was cancelled. You can try again.";
+  return "Sign-in could not be completed. Please try again.";
 }

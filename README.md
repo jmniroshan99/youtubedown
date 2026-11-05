@@ -31,7 +31,7 @@ Media processing remains server-side. The browser's standard download mechanism 
 
 Create an account with four fields: Full name, Email address, Password and Confirm password. Continue with Google and Continue with Facebook use real Supabase OAuth; email and guest access remain available. Name is display metadata only. No provider secret belongs in the frontend.
 
-The public Auth settings checked for this project on 2 November 2026 showed Email enabled, signups allowed and email confirmation required; Google and Facebook were disabled. The code cannot enable provider applications by itself. Follow [docs/SOCIAL_SIGN_IN.md](docs/SOCIAL_SIGN_IN.md) to configure the provider credentials and exact callbacks. Public email delivery also needs appropriate SMTP setup. No real account creation or social login was performed during verification.
+The latest public Auth-settings check on 5 November 2026 shows Google, Facebook, Email and Anonymous sign-ins enabled, with email confirmation still required. Google startup reaches its sign-in page, but a fresh cancelled flow incorrectly returns to localhost. The owner must correct Supabase's production Site URL and allowed frontend callbacks; see [docs/SOCIAL_SIGN_IN.md](docs/SOCIAL_SIGN_IN.md). Run `diagnose-auth.bat` to check that return path and backend health. Public email delivery also needs appropriate SMTP setup. A completed Google/Facebook login is not yet verified.
 
 ## Website compatibility
 

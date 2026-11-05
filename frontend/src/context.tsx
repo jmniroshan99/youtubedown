@@ -16,6 +16,11 @@ import { ensureGuestSession } from "./guestSession";
 const CaptchaDialog = lazy(() => import("./components/CaptchaDialog"));
 import { settingsOptions } from "./queries";
 import { clearPrivateState } from "./queryClient";
+import { observeRecoveryAuth } from "./recoveryAuth";
+
+// Register while modules load so an initial recovery event is retained before
+// lazy routes or account-switch remounts can subscribe to it.
+observeRecoveryAuth(supabase?.auth);
 
 type Theme = "light" | "dark";
 const Context = createContext<{

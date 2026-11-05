@@ -8,9 +8,11 @@ import { Button } from "./components/ui/button";
 import { useApp } from "./context";
 import { supabase } from "./lib";
 import { runAuthAction } from "./guestSession";
+import { hasRecoveryAuthority, useRecoveryVersion } from "./recoveryAuth";
+import { updateRecoveryPassword } from "./recoveryPassword";
 import {
-  authSchema, callbackFailure, checkSocialProvider, clearCallbackAddress,
-  friendlyAuthError, providerName, redirectToProvider, safeReturnPath,
+  AuthFlowError, authSchema, callbackFailure, checkSocialProvider, clearCallbackAddress,
+  friendlyAuthError, providerName, redirectToProvider, safeReturnPath, unconsumedCallbackCode,
   type AuthFields, type AuthMode, type SocialProvider,
 } from "./authSupport";
 
@@ -30,13 +32,15 @@ function ProviderMark({ provider }: { provider: SocialProvider }) {
 }
 
 export function AuthPage({ mode }: { mode: AuthMode }) {
-  const { session, getCaptchaToken } = useApp();
+  const { session, loading, getCaptchaToken } = useApp();
   const navigate = useNavigate();
   const location = useLocation();
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [working, setWorking] = useState(false);
   const [social, setSocial] = useState<SocialProvider>();
+  const [recoveryCheck, setRecoveryCheck] = useState({ checked: false, error: "" });
+  useRecoveryVersion();
   const active = useRef(false);
   const alive = useRef(true);
   const generation = useRef(0);
@@ -57,25 +61,51 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
     reset({ fullName: "", email: "", password: "", confirmPassword: "" });
     return () => { generation.current += 1; };
   }, [mode, reset]);
+  useEffect(() => {
+    if (mode !== "reset") return;
+    let current = true;
+    const callbackError = callbackFailure(window.location.href);
+    setRecoveryCheck({ checked: false, error: "" });
+    (async () => {
+      if (!supabase) throw new AuthFlowError("AUTH_NOT_CONFIGURED");
+      const initialized = await supabase.auth.initialize();
+      if (initialized.error || callbackError || unconsumedCallbackCode()) throw new AuthFlowError("RECOVERY_LINK_INVALID");
+      const result = await supabase.auth.getSession();
+      if (result.error || !result.data.session || result.data.session.user.is_anonymous)
+        throw new AuthFlowError("RECOVERY_LINK_INVALID");
+      if (current) setRecoveryCheck({ checked: true, error: "" });
+    })().catch((error: unknown) => {
+      if (current) setRecoveryCheck({ checked: true, error: callbackError || friendlyAuthError(error) });
+    }).finally(() => {
+      // Keep the code until the constructor's one PKCE exchange has settled.
+      if (current) clearCallbackAddress();
+    });
+    return () => { current = false; };
+  }, [mode]);
   const headings: Record<AuthMode, string> = {
     login: "Welcome back.",
     register: "Create your account.",
     forgot: "Reset your password.",
     reset: "Choose a new password.",
   };
-  const busy = working || isSubmitting;
+  const recoveryReady = mode !== "reset" || (recoveryCheck.checked && !recoveryCheck.error && !loading && hasRecoveryAuthority(session));
+  const busy = working || isSubmitting || (mode === "reset" && !recoveryCheck.checked);
   const showSocial = mode === "login" || mode === "register";
   if (session && !session.user.is_anonymous && showSocial)
     return <Navigate to="/" replace />;
 
   async function submit(data: AuthFields) {
     if (active.current || currentMode.current !== mode) return;
+    if (mode === "reset" && !recoveryReady) {
+      setError(new AuthFlowError("RECOVERY_LINK_INVALID").message);
+      return;
+    }
     const started = generation.current;
     const isCurrent = () => alive.current && generation.current === started && currentMode.current === mode;
     active.current = true;
     setWorking(true); setSocial(undefined); setError(""); setMessage("");
     try {
-      if (!supabase) throw new Error("Account sign-in is not configured. Please contact support or continue as a guest.");
+      if (!supabase) throw new AuthFlowError("AUTH_NOT_CONFIGURED");
       const client = supabase;
       const captchaToken = mode === "reset" ? undefined : await getCaptchaToken();
       if (!isCurrent()) return;
@@ -93,7 +123,7 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
             email: data.email.trim(), password: data.password, options: { captchaToken },
           });
           if (result.error) throw result.error;
-          if (!result.data.session) throw new Error("A sign-in session could not be started. Please try again.");
+          if (!result.data.session) throw new AuthFlowError("AUTH_SESSION_MISSING");
           return "signed-in";
         }
         if (mode === "register") {
@@ -115,8 +145,13 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
           if (result.error) throw result.error;
           return "reset-requested";
         }
-        const result = await client.auth.updateUser({ password: data.password });
-        if (result.error) throw result.error;
+        const initialized = await client.auth.initialize();
+        if (!isCurrent()) throw new DOMException("Cancelled", "AbortError");
+        if (initialized.error || unconsumedCallbackCode()) throw new AuthFlowError("RECOVERY_LINK_INVALID");
+        const current = await client.auth.getSession();
+        if (!isCurrent()) throw new DOMException("Cancelled", "AbortError");
+        if (current.error || !hasRecoveryAuthority(current.data.session)) throw new AuthFlowError("RECOVERY_SESSION_CHANGED");
+        await updateRecoveryPassword(current.data.session!, data.password);
         return "updated";
       });
       if (!isCurrent()) return;
@@ -140,7 +175,7 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
     setWorking(true); setSocial(provider); setError(""); setMessage("");
     let leaving = false;
     try {
-      if (!supabase) throw new Error("Account sign-in is not configured. Please contact support or continue as a guest.");
+      if (!supabase) throw new AuthFlowError("AUTH_NOT_CONFIGURED");
       const client = supabase;
       const outcome = await runAuthAction(async () => {
         if (!isCurrent()) throw new DOMException("Cancelled", "AbortError");
@@ -160,7 +195,7 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
           },
         });
         if (result.error) throw result.error;
-        if (!result.data.url) throw new Error(`${providerName(provider)} sign-in could not be started. Please try again.`);
+        if (!result.data.url) throw new AuthFlowError(provider === "google" ? "GOOGLE_START_FAILED" : "FACEBOOK_START_FAILED");
         return { url: result.data.url };
       });
       if (!isCurrent()) return;
@@ -216,6 +251,9 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
         {session?.user.is_anonymous && <Notice>Signing in or creating a separate account does not transfer your guest downloads. Finish saving any files you need first.</Notice>}
         {error && <Notice kind="error">{error}</Notice>}
         {message && <Notice kind={social ? "info" : "success"}>{message}</Notice>}
+        {mode === "reset" && (!recoveryCheck.checked || loading
+          ? <Notice>Checking your password reset link…</Notice>
+          : !recoveryReady && <Notice kind="error">{recoveryCheck.error || "Open a fresh password reset link in this browser to continue."} <Link to="/forgot-password">Request a new reset link</Link></Notice>)}
         {showSocial && <>
           <div className="social-auth" aria-label="Continue with a social account">
             {(["google", "facebook"] as const).map((provider) => (
@@ -235,7 +273,7 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
           {mode === "register" && field("confirmPassword", "Confirm password", "password", "new-password")}
           {(mode === "register" || mode === "reset") && <p className="field-hint">Use at least 8 characters for your password.</p>}
           {mode === "login" && <Link className="small-link" to="/forgot-password">Forgot password?</Link>}
-          <Button disabled={busy || !supabase}>
+          <Button disabled={busy || !supabase || !recoveryReady}>
             {busy && !social ? <LoaderCircle size={18} className="spin" /> : <ArrowRight size={18} />}
             {busy && !social ? "Please wait…" : mode === "login" ? "Sign in" : mode === "register" ? "Create account" : "Reset password"}
           </Button>
@@ -250,7 +288,7 @@ export function AuthPage({ mode }: { mode: AuthMode }) {
 export function AuthCallback() {
   const { session, loading } = useApp();
   const [error, setError] = useState(() => callbackFailure(window.location.href));
-  const [checked, setChecked] = useState(false);
+  const [checkedUserId, setCheckedUserId] = useState("");
   const [slow, setSlow] = useState(false);
   useEffect(() => {
     let alive = true;
@@ -264,25 +302,30 @@ export function AuthCallback() {
       // Do not manually exchange the code or remove it before the SDK can read it.
       const initialized = await supabase.auth.initialize();
       if (initialized.error) throw initialized.error;
+      if (unconsumedCallbackCode()) throw new AuthFlowError("CALLBACK_LINK_INVALID");
       const result = await supabase.auth.getSession();
       if (result.error) throw result.error;
+      if (!result.data.session || result.data.session.user.is_anonymous) throw new AuthFlowError("CALLBACK_SESSION_MISSING");
       if (alive) {
         clearCallbackAddress();
-        setChecked(true);
+        setCheckedUserId(result.data.session.user.id);
       }
-    })().catch(() => {
-      if (alive) setError((existing) => existing || "Sign-in could not be completed. Request a new link or try signing in again.");
+    })().catch((error: unknown) => {
+      if (alive) setError((existing) => existing || (error instanceof AuthFlowError
+        ? error.message : "Sign-in could not be completed. Request a new link or try signing in again."));
     }).finally(() => {
       if (alive) clearCallbackAddress();
     });
     return () => { alive = false; clearTimeout(timer); };
   }, []);
-  if (!error && checked && session && !session.user.is_anonymous && !loading)
+  const sessionMismatch = checkedUserId && !loading && (!session || session.user.is_anonymous || session.user.id !== checkedUserId);
+  const failure = error || (sessionMismatch ? "The sign-in session changed. Please sign in again." : "");
+  if (!failure && checkedUserId && session && !session.user.is_anonymous && !loading)
     return <Navigate to="/" replace />;
   return (
     <section className="panel compact-panel">
-      <h1>{error ? "Sign-in not completed" : "Completing sign-in…"}</h1>
-      {error ? <Notice kind="error">{error} <Link to="/login">Sign in</Link> · <Link to="/">Continue as guest</Link></Notice> : <>
+      <h1>{failure ? "Sign-in not completed" : "Completing sign-in…"}</h1>
+      {failure ? <Notice kind="error">{failure} <Link to="/login">Sign in</Link> · <Link to="/">Continue as guest</Link></Notice> : <>
         <div role="status" aria-live="polite"><LoaderCircle className="spin" aria-hidden="true" /><span>Checking your account…</span></div>
         {slow && <Notice>Sign-in is taking longer than expected. Check your connection, <Link to="/login">try signing in again</Link>, or <Link to="/">continue as a guest</Link>.</Notice>}
       </>}

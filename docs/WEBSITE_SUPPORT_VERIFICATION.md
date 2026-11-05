@@ -27,7 +27,7 @@ Pornhub's pinned upstream extractor manufactures age-verification cookies and ca
 |---|---|
 | Locked frontend dependencies | `npm ci` completed. Existing package-lock preserved. |
 | Frontend production build / ESLint | Passed. |
-| Frontend Vitest | 119 tests across 14 files passed, including TLS messages, missing-backend preflight, production hostname isolation, retired-tunnel/authentication URL migration, safe guest-session failures and server-provided duration-limit guidance. |
+| Frontend Vitest | 144 tests across 15 files passed, including OAuth callbacks, recovery-session binding, safe errors, cancellation races, retry idempotency, TLS messages, backend preflight, hostname isolation and duration-limit guidance. |
 | Backend pytest | 325 tests passed under Linux/Python 3.12 with pinned dependencies and FFmpeg, including verified TLS probing, manifest sampling, safe diagnostics and two-hour duration boundaries. |
 | Backend Ruff | Passed, including new runtime and fixture coverage. |
 | Production Docker builds | API, worker, scheduler and guarded egress built successfully. Existing running services were not restarted by verification. |
@@ -90,6 +90,20 @@ The later connection screenshot was reproduced with Docker's Linux engine stoppe
 Automatic approval review rejected creation of a private inspection-CA bundle because it would broaden backend certificate acceptance without explicit authorization. The user then chose to keep current trust settings for both proposed scopes. No real CA was exported, no private trust bundle/override was created, and no trust option was activated. The unactivated option and its helper were removed; backend runtime source and CA configuration remain at the previously verified 325-test baseline. A retained subprocess-isolation regression also checks that parent `SSL_CERT_FILE` and `SSL_CERT_DIR` values are not forwarded.
 
 The retained Windows startup improvement launches the installed Docker Desktop when this start command is explicitly run and waits for its engine, without changing login tasks or trust. Docker is running, but API readiness remains `database_unavailable` under the observed HTTPS inspection. Public tunnel readiness and downloads are not claimed restored. A PC/network administrator must correct the connection so it validates under existing trust; verification was not disabled and no routing workaround was applied. The earlier frontend 119-test/build/lint baseline is unchanged.
+
+## Google sign-in and workflow follow-up
+
+The 5 November public Auth-settings response has Google, Facebook, Email and Anonymous sign-ins enabled, sign-ups allowed and email confirmation required. Clean Chrome reached Google's account sign-in page from the deployed Google button with the correct Supabase provider callback; no visible invalid-client or redirect-mismatch error appeared at that stage. This verifies startup only, not the client secret, consent, audience eligibility or a completed account session.
+
+Cancelling a fresh diagnostic OAuth flow reproduced a return to `http://localhost:3000/` rather than the requested production `/auth/callback`. The owner has been asked to save the production Site URL and exact callback/reset Redirect URLs in Supabase; there is no authenticated management connection in this workspace. Source code cannot permanently correct that hosted setting. `diagnose-auth.bat` repeats a fresh cancellation check and prints only safe check codes and public configuration URLs. The current diagnostic correctly fails with `AUTH_REDIRECT_CONFIGURATION` and also reports the unavailable download backend. It does not send emails, create accounts or download media.
+
+Frontend fixes now stop callbacks with no account session or an unconsumed PKCE code instead of spinning or accepting an older saved account. The SDK remains the single code-exchange owner. Password-reset submission requires a real recovery event bound to the current session, with revocation on account changes and consumption after the update. The password mutation uses that captured recovery bearer token rather than reloading a potentially changed saved account; it neither forwards cookies/follows redirects nor writes over the primary session. A regression switches the primary account between validation and mutation and verifies only the recovered account receives the update. Same-session refocus and token refresh preserve the in-memory grant; a hard reload after consuming the email link requires a fresh reset link. Unknown provider errors no longer echo raw response text.
+
+Download fixes ignore late cancellation responses after a new URL, reconnect polling to an acknowledged active job, keep retry keys across ambiguous failures and rotate them after acknowledgement. A file that finishes during cancellation remains available through Save file with no new preparation or invented browser-download success.
+
+All 144 frontend tests, production build and ESLint passed after these changes. Clean Chrome against the production build additionally confirmed both social buttons, terminal missing-session/missing-verifier callbacks, safe cancellation messages and URL cleanup, and a disabled reset submit without recovery authority. There were zero page errors, account creations, password mutations, outgoing recovery emails or preparation requests. PowerShell parsing and the live diagnostic ran successfully; its failure results match the reproduced external configuration and backend problems.
+
+No backend code, certificate trust, environment names, storage keys, dependencies, RLS or account records changed in this follow-up. The earlier 325-test backend baseline remains applicable. Full live Google/Facebook consent, email delivery and current download transfers remain unverified: they require the owner's hosted configuration and a ready backend. The user declined inspection-CA trust changes, and that choice remains in effect.
 
 ## Distribution contents
 

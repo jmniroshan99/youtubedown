@@ -141,12 +141,16 @@ def package():
             "frontend/src/lib.ts",
             "frontend/src/autoDownload.ts",
             "frontend/src/main.tsx",
+            "frontend/src/recoveryAuth.ts",
+            "frontend/src/recoveryPassword.ts",
             "frontend/package-lock.json",
             "backend/requirements.txt",
             "backend/requirements-dev.txt",
             "netlify.toml",
             "docs/WEBSITE_SUPPORT_SETUP.md",
             "docs/WEBSITE_SUPPORT_VERIFICATION.md",
+            "diagnose-auth.bat",
+            "scripts/diagnose-auth.ps1",
         ]:
             assert "youtubedown/" + required in names
     print(

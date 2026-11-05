@@ -2,11 +2,15 @@
 
 The registration form has four rows: **Full name**, **Email address**, **Password**, and **Confirm password**. Users can also choose **Continue with Google**, **Continue with Facebook**, or **Continue as guest**.
 
-The application code does not create the provider applications or enable them in your hosted Supabase project. Complete the provider settings below before testing public social sign-in. No live provider sign-in is claimed by this guide.
+The application code does not create the provider applications or change your hosted Supabase settings. Complete the provider settings below before testing public social sign-in. A completed Google/Facebook account login still requires an interactive check with an allowed account.
 
 ## Observed project state
 
-A read-only check of this project's public Auth settings on 2 November 2026 returned: Google disabled, Facebook disabled, Email enabled, sign-ups allowed and email confirmation required. No secrets, user records or sessions were read. Provider settings were not changed. The buttons explain unavailable providers rather than simulating a successful login.
+A fresh public-settings check on 5 November 2026 returned Google, Facebook, Email and Anonymous sign-ins enabled, sign-ups allowed and email confirmation required. Earlier disabled-provider findings no longer describe the current configuration.
+
+A clean Chrome session reached Google's account sign-in page through the production Google button. The provider callback correctly targeted this project's Supabase `/auth/v1/callback`. However, cancelling a fresh diagnostic flow returned to `http://localhost:3000/` instead of the requested Netlify callback. This reproduces a hosted redirect-configuration problem. No credentials, consent, account creation or successful account login were used in this check, and private provider settings were not read or changed.
+
+The owner must save the production Site URL and exact Redirect URLs below in Supabase. Local source changes cannot update that dashboard configuration. Keep existing local entries. Run `diagnose-auth.bat` afterward: it checks public provider flags, its own temporary OAuth cancellation return and public backend health, without printing tokens, OAuth state or raw provider responses. It reads the existing public key from `frontend/.env.local`; no new secret is required.
 
 ## 1. Keep these URLs separate
 
@@ -16,9 +20,10 @@ A read-only check of this project's public Auth settings on 2 November 2026 retu
 | Meta valid OAuth redirect URI | `https://dxtucfijilmytkwrzsox.supabase.co/auth/v1/callback` |
 | Supabase allowed frontend callback, local IP | `http://127.0.0.1:5173/auth/callback` |
 | Supabase allowed frontend callback, localhost | `http://localhost:5173/auth/callback` |
-| Existing password-reset destinations | `http://127.0.0.1:5173/reset-password` and `http://localhost:5173/reset-password` |
-| Production frontend callback | Your actual HTTPS frontend origin plus `/auth/callback` |
-| Production password-reset destination | Your actual HTTPS frontend origin plus `/reset-password` |
+| Local password-reset destinations | `http://127.0.0.1:5173/reset-password` and `http://localhost:5173/reset-password` |
+| Supabase production Site URL | `https://youtubedownl.netlify.app` |
+| Supabase production allowed frontend callback | `https://youtubedownl.netlify.app/auth/callback` |
+| Supabase production allowed password-reset destination | `https://youtubedownl.netlify.app/reset-password` |
 
 In Supabase **Authentication → URL Configuration**, set **Site URL** to the real production frontend URL and add the exact frontend callback/reset URLs you use. During local-only testing, use your chosen local frontend origin as Site URL.
 
@@ -72,9 +77,15 @@ If a provider is disabled, its button cannot make that provider available by its
 
 Provider console setup, public app access, SMTP delivery and a real Google/Facebook session require live testing with the owner's configured services. No credentials or provider settings were changed while preparing this source update.
 
+## Callback and password-reset behavior
+
+The existing Supabase SDK performs the PKCE exchange once. Missing verifiers, expired codes, guest-only returns and missing sessions now produce a terminal sign-in error with retry/guest links. An older saved account cannot make an unexchanged code appear successful. Callback query/fragment data is removed after SDK initialization. Unknown provider errors use fixed safe messages.
+
+Password changes from the reset screen require an actual SDK password-recovery event tied to that browser session. URL flags and an older saved login do not grant reset authority. The password update uses the captured recovery token, so a concurrent account switch cannot redirect the change to a different account or overwrite its saved session. Account changes revoke the grant; same-session focus and token refresh preserve it. The recovery grant stays in memory, so reloading a consumed reset link requires requesting a fresh link. Existing authentication storage keys are unchanged.
+
 ## Official references
 
-Checked on 2 November 2026.
+Google, redirect and PKCE references rechecked on 5 November 2026. Other setup references were checked on 2 November 2026.
 
 - [Supabase Google sign-in](https://supabase.com/docs/guides/auth/social-sign-in/auth-google)
 - [Supabase Facebook sign-in](https://supabase.com/docs/guides/auth/social-sign-in/auth-facebook)
