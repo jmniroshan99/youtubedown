@@ -54,9 +54,15 @@ try {
     New-Item -ItemType Directory -Path $runtimeRoot -Force | Out-Null
     @{ url = $publicUrl; frontend_origin = $frontendOrigin; created_at = [DateTime]::UtcNow.ToString('o') } |
         ConvertTo-Json | Set-Content -LiteralPath (Join-Path $runtimeRoot 'netlify-tunnel.json') -Encoding UTF8
+    # This is public endpoint metadata, never credentials or source URLs.
+    # It applies only to this exact production hostname and is secondary to VITE_API_BASE_URL.
+    $deploymentPath = Join-Path $projectRoot 'frontend/src/publicDeployment.json'
+    $deploymentConfig = [ordered]@{ hostname = ([Uri]$frontendOrigin).Host; apiBaseUrl = $publicUrl }
+    [System.IO.File]::WriteAllText($deploymentPath, (($deploymentConfig | ConvertTo-Json) + "`n"), (New-Object System.Text.UTF8Encoding($false)))
     Write-Host ''
     Write-Host 'PASS: public HTTPS health and exact-origin CORS checks.'
     Write-Host "Set this Netlify build variable: VITE_API_BASE_URL=$publicUrl"
-    Write-Host 'Then redeploy the Netlify frontend. Keep this PC and Docker Desktop running.'
+    Write-Host 'Public deployment fallback updated. Push the changed publicDeployment.json to GitHub to publish it, or update the Netlify variable and redeploy.'
+    Write-Host 'Keep this PC and Docker Desktop running.'
     Write-Host 'This temporary address changes when a new tunnel is created. Use stop-netlify-backend.bat to close public access.'
 } finally { Pop-Location }

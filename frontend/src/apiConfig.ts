@@ -26,8 +26,14 @@ export function resolveApiBase(
   base: string,
   development: boolean,
   hostname: string,
+  publicDeployment?: { hostname: string; apiBaseUrl: string },
 ) {
-  const clean = base.trim().replace(/\/$/, "");
+  // Public deployment metadata is a fallback only for its exact frontend host.
+  // Explicit environment configuration and local development retain precedence.
+  const fallback = !development && hostname === publicDeployment?.hostname
+    ? publicDeployment.apiBaseUrl.trim()
+    : "";
+  const clean = (base.trim() || fallback).replace(/\/$/, "");
   return development && isLoopback(hostname) && localProxyTarget(clean)
     ? "/backend"
     : clean;

@@ -3,6 +3,7 @@ import { isLoopback, resolveApiBase } from "./apiConfig";
 import { clsx, type ClassValue } from "clsx";
 import type { DatabaseSchema } from "./database.types";
 import { privateRequestSignal } from "./requestScope";
+import publicDeployment from "./publicDeployment.json";
 export const cn = (...values: ClassValue[]) => clsx(values);
 const url = import.meta.env.VITE_SUPABASE_URL?.trim();
 const key = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY?.trim();
@@ -23,6 +24,7 @@ export const apiBase = resolveApiBase(
   import.meta.env.VITE_API_BASE_URL || "",
   import.meta.env.DEV,
   window.location.hostname,
+  publicDeployment,
 );
 export function checkApiBase(
   base: string,

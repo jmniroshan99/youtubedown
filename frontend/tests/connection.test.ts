@@ -11,6 +11,19 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 describe("development connection routing", () => {
+  const deployment = { hostname: "site.netlify.app", apiBaseUrl: "https://public-api.example.test/" };
+  it("uses the public deployment fallback for an unset production variable on its exact frontend host", () => {
+    for (const empty of ["", "   "])
+      expect(resolveApiBase(empty, false, "site.netlify.app", deployment)).toBe("https://public-api.example.test");
+  });
+  it("keeps explicit environment configuration ahead of public deployment metadata", () => {
+    expect(resolveApiBase("https://configured.example.test/", false, "site.netlify.app", deployment)).toBe("https://configured.example.test");
+  });
+  it("does not send local-development or another site's sessions to the deployment fallback", () => {
+    expect(resolveApiBase("", true, "site.netlify.app", deployment)).toBe("");
+    expect(resolveApiBase("", false, "another.netlify.app", deployment)).toBe("");
+    expect(resolveApiBase("http://localhost:8000", true, "localhost", deployment)).toBe("/backend");
+  });
   it("uses one origin and IPv4 for either local frontend hostname", () => {
     expect(localProxyTarget("http://localhost:8000")).toBe(
       "http://127.0.0.1:8000",
