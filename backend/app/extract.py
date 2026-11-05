@@ -6,8 +6,14 @@ import subprocess
 import sys
 import threading
 import time
+from contextlib import ExitStack
 from pathlib import Path
+from tempfile import TemporaryDirectory
+from urllib.parse import urlsplit
 
+import certifi
+
+from .manifest_probe import manifest_sample
 from .media_errors import media_error_code
 from .media_runtime import PublicYoutubeDL
 from .providers import matching_provider
@@ -143,7 +149,7 @@ def probe_direct(info, proxy, require_duration=False, source_url=None, source_ru
         need_duration = require_duration and not info.get("duration")
         # A pasted page can embed a direct file or a segmented manifest. Probe
         # the extracted media, never the HTML page in place of that media.
-        url = fmt.get("manifest_url") or fmt.get("url") or source_url
+        url = fmt.get("url") or fmt.get("manifest_url") or source_url
         if not url or (fmt.get("vcodec") is not None and fmt.get("acodec") is not None and not need_duration):
             continue
         rule = matching_provider(url, source_rules)
@@ -152,38 +158,58 @@ def probe_direct(info, proxy, require_duration=False, source_url=None, source_ru
         # Carry only the public playback headers needed by sources such as
         # Pornhub/xHamster. Never accept injected CR/LF or source credentials.
         headers = {**info.get("http_headers", {}), **fmt.get("http_headers", {})}
-        public_headers = "".join(
-            f"{key}: {value}\r\n"
+        safe_headers = {
+            key: str(value)
             for key, value in headers.items()
             if key.lower() in {"referer", "origin", "user-agent"} and not any(c in str(value) for c in "\r\n")
+        }
+        public_headers = "".join(f"{key}: {value}\r\n" for key, value in safe_headers.items())
+        segmented = fmt.get("protocol") in {"m3u8", "m3u8_native", "http_dash_segments", "dash"} or (
+            urlsplit(url).path.lower().endswith((".m3u8", ".mpd"))
         )
+        sample = None
+        if segmented:
+            # FFmpeg does not propagate TLS settings to all manifest children.
+            # Fetch bounded samples through yt-dlp's verified guarded transport,
+            # then allow FFprobe to inspect only the resulting local bytes.
+            duration, sample = manifest_sample(fmt, proxy, safe_headers, source_rules)
+            if duration and not info.get("duration"):
+                info["duration"] = duration
+            if not sample:
+                continue
         try:
-            result = subprocess.run(
-                [
-                    "ffprobe",
-                    "-v",
-                    "error",
-                    "-http_proxy",
-                    proxy,
-                    *(["-headers", public_headers] if public_headers else []),
-                    "-rw_timeout",
-                    "10000000",
-                    "-probesize",
-                    "4000000",
-                    "-analyzeduration",
-                    "4000000",
-                    "-protocol_whitelist",
-                    "http,https,tcp,tls,httpproxy",
-                    "-show_entries",
-                    "stream=codec_type,codec_name,height:format=duration,size",
-                    "-of",
-                    "json",
-                    url,
-                ],
-                capture_output=True,
-                timeout=15,
-                check=True,
-            )
+            with ExitStack() as resources:
+                if sample:
+                    directory = Path(resources.enter_context(TemporaryDirectory(prefix="probe-")))
+                    target = directory / "sample.bin"
+                    target.write_bytes(sample)
+                    transport = ["-protocol_whitelist", "file"]
+                else:
+                    target = url
+                    transport = [
+                        "-http_proxy", proxy,
+                        "-tls_verify", "1",
+                        "-ca_file", certifi.where(),
+                        *(["-headers", public_headers] if public_headers else []),
+                        "-rw_timeout", "10000000",
+                        "-protocol_whitelist", "http,https,tcp,tls,httpproxy",
+                    ]
+                result = subprocess.run(
+                    [
+                        "ffprobe", "-v", "error",
+                        *transport,
+                        # A disguised manifest must not cause network FFprobe to
+                        # open additional URLs with different TLS defaults.
+                        "-format_whitelist", "mov,matroska,mpegts,mpeg,avi,flv,mp3,aac,ogg,flac,wav,m4v,h264,hevc",
+                        "-probesize", "4000000",
+                        "-analyzeduration", "4000000",
+                        "-show_entries", "stream=codec_type,codec_name,height:format=duration,size",
+                        "-of", "json", str(target),
+                    ],
+                    capture_output=True,
+                    timeout=15,
+                    check=True,
+                )
             data = json.loads(result.stdout)
             video = next((s for s in data.get("streams", []) if s.get("codec_type") == "video"), None)
             audio = next((s for s in data.get("streams", []) if s.get("codec_type") == "audio"), None)
@@ -193,8 +219,27 @@ def probe_direct(info, proxy, require_duration=False, source_url=None, source_ru
                 fmt["acodec"] = audio["codec_name"] if audio else "none"
             if not fmt.get("height"):
                 fmt["height"] = video.get("height") if video else None
-            if data.get("format", {}).get("duration"):
+            # A short segment cannot stand in for the full source duration.
+            if not segmented and data.get("format", {}).get("duration"):
                 info["duration"] = float(data["format"]["duration"])
+        except subprocess.CalledProcessError as exc:
+            # Only classify known TLS diagnostics; never expose FFprobe stderr,
+            # which may contain signed media URLs or provider response details.
+            details = exc.stderr or b""
+            details = details.encode() if isinstance(details, str) else details
+            details = details.lower()
+            if any(
+                marker in details
+                for marker in (
+                    b"peer certificate failed verification",
+                    b"certificate verification failed",
+                    b"certificate verify failed",
+                    b"does not match hostname",
+                    b"hostname mismatch",
+                )
+            ):
+                raise ValueError("SOURCE_TLS_ERROR") from None
+            continue
         except (OSError, subprocess.SubprocessError, ValueError, KeyError):
             # Original container remains selectable, but no unverified audio formats are advertised.
             continue

@@ -149,7 +149,9 @@ def test_missing_duration_probes_extracted_media_not_original_html(manifest):
             }
         ).encode()
         probe_direct(info, "http://egress:8080", True, "https://site.example.com/page")
-    assert probe.call_args.args[0][-1] == (manifest or "https://cdn.example.com/video.mp4")
+    # A progressive rendition is probed directly, rather than inspecting its
+    # parent manifest or accidentally choosing another rendition's metadata.
+    assert probe.call_args.args[0][-1] == "https://cdn.example.com/video.mp4"
     assert probe.call_args.args[0][probe.call_args.args[0].index("-http_proxy") + 1] == "http://egress:8080"
     assert info["duration"] == 2
 

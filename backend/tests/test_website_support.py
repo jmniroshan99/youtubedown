@@ -226,6 +226,29 @@ def test_probe_checks_each_unknown_progressive_format_and_preserves_playback_hea
     assert all(f["has_audio"] for f in normalize(info)["formats"] if f["kind"] == "video")
 
 
+@pytest.mark.parametrize("full_duration", [None, 5305])
+def test_segment_samples_are_probed_locally_without_replacing_the_full_source_duration(full_duration):
+    info = {
+        "formats": [{"format_id": "hls", "ext": "mp4", "protocol": "m3u8_native", "url": "https://cdn.example/stream.m3u8"}],
+    }
+    with (
+        patch("app.extract.manifest_sample", return_value=(full_duration, b"synthetic local sample")),
+        patch("app.extract.subprocess.run") as probe,
+    ):
+        probe.return_value.stdout = json.dumps({
+            "streams": [{"codec_type": "video", "codec_name": "h264"}, {"codec_type": "audio", "codec_name": "aac"}],
+            "format": {"duration": "1"},
+        }).encode()
+        probe_direct(info, "http://egress:8080", require_duration=True)
+    command = probe.call_args.args[0]
+    assert command[command.index("-protocol_whitelist") + 1] == "file"
+    assert "-http_proxy" not in command
+    assert not any("https://" in argument for argument in command)
+    assert not Path(command[-1]).exists()
+    assert info.get("duration") == full_duration
+    assert info["formats"][0]["acodec"] == "aac"
+
+
 def test_audio_and_merge_selectors_cannot_fall_back_to_drm_or_another_quality():
     info = normalize(
         {

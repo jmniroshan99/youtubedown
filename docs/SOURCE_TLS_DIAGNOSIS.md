@@ -28,3 +28,13 @@ Have the network/security administrator identify the Fortinet inspection policy 
 No certificate was imported, no trust store was modified, and no certificate checks were disabled. Browser cookies, alternate DNS, regional workarounds and access-control bypasses were not used. Merely retrying the same link or changing yt-dlp URL matching cannot correct this observed TLS failure. After the approved network correction, rerun `diagnose-source-tls.bat` and then analyze a permitted public source again; a successful HEAD check alone does not guarantee extraction or downloads.
 
 The updated ZIP includes these diagnostic/error improvements. Source connections remain unavailable under the currently observed certificate trust configuration. The earlier successful public MP4/MP3 flow and its verification limits remain documented in [WEBSITE_SUPPORT_VERIFICATION.md](WEBSITE_SUPPORT_VERIFICATION.md).
+
+## Recheck after the two-hour update
+
+The running worker still reproduces `SOURCE_TLS_ERROR` for both xHamster and Pornhub; the YouTube control and guarded DNS/TCP checks pass. The official yt-dlp release metadata was checked on 5 November 2026 and the deployed `2026.10.26` pin matches the latest stable release at that check. Dedicated routing fixtures remain separate from live webpage compatibility: their parser mocks do not establish that today's pages are retrievable.
+
+The review also identified a separate network-probing defect. FFprobe defaults to certificate verification off. Progressive probes now explicitly use verified TLS and the same pinned certifi bundle as the extractor, with destination hostname validation retained across redirects. Known certificate failures return the safe TLS code rather than raw FFprobe diagnostics.
+
+FFmpeg's [TLS implementation](https://github.com/FFmpeg/FFmpeg/blob/n5.1.8/libavformat/tls_gnutls.c) checks the destination hostname when verification is enabled, but its [manifest option copying](https://github.com/FFmpeg/FFmpeg/blob/n5.1.8/libavformat/aviobuf.c) does not carry all TLS options into child segment requests. Manifest sampling therefore uses verified yt-dlp transport and bounded local sample bytes; FFprobe receives file-only access for those samples. A short sample is never used as the full video's duration. Network FFprobe excludes manifest demuxers so a disguised playlist cannot reintroduce unverified child requests.
+
+These changes close an application security gap. They do not repair or trust the Fortinet chain, bypass a network policy, or establish live xHamster/Pornhub download success. An approved network/trust correction is still required before extraction can be tested from this backend.
