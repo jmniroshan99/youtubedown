@@ -28,7 +28,7 @@ Pornhub's pinned upstream extractor manufactures age-verification cookies and ca
 | Locked frontend dependencies | `npm ci` completed. Existing package-lock preserved. |
 | Frontend production build / ESLint | Passed. |
 | Frontend Vitest | 119 tests across 14 files passed, including TLS messages, missing-backend preflight, production hostname isolation, retired-tunnel/authentication URL migration, safe guest-session failures and server-provided duration-limit guidance. |
-| Backend pytest | 275 tests passed under Linux/Python 3.12 with pinned dependencies and FFmpeg, including verified TLS diagnostic/error coverage. |
+| Backend pytest | 282 tests passed under Linux/Python 3.12 with pinned dependencies and FFmpeg, including verified TLS diagnostic/error coverage and two-hour duration boundaries. |
 | Backend Ruff | Passed, including new runtime and fixture coverage. |
 | Production Docker builds | API, worker, scheduler and guarded egress built successfully. Existing running services were not restarted by verification. |
 | Windows verification | Included PowerShell workflow exercised builds, isolated backend suite/lint, npm ci, frontend build/lint/tests. |
@@ -61,9 +61,15 @@ Chrome's download manager completed the MP4 (5,510,872 bytes) and explicit MP3 (
 
 ## Duration-limit follow-up
 
-The running API and Celery worker both report a 900-second guest limit and a 3,600-second signed-in account limit. Policy snapshots, retries, extraction checks and final FFprobe validation all use seconds and retain the strictest applicable limit. No duration-unit defect was found. The screenshot's truncated YouTube link does not establish its actual length, so an incorrect rejection of that particular video has not been reproduced.
+The requested maximum video duration is now 7,200 seconds (two hours) for guests and signed-in accounts. Both configuration defaults and `backend/.env.example` use that value, and the private PC backend environment was updated explicitly. The previous screenshot used the then-configured 900-second guest ceiling; no duration-unit defect was found. API, worker and scheduler use the same policy. Existing analysis/job snapshots retain any stricter original limits, so previously rejected links require fresh analysis.
 
-The frontend now displays the exact duration ceiling from the existing failed-analysis response (`download_limits.max_duration`), rather than hiding it behind "allowed duration." For example, a guest failure states "current limit of 15 minutes." The code and analysis stage remain visible. Missing, fractional, nonpositive, nonfinite, unsafe or nonnumeric limits retain safe generic guidance. No quota, account rule, environment setting, worker network or download behavior changed. Regression tests verify guest/account limits, exact seconds, safe fallback and zero preparation/browser-download attempts after rejection; production build, lint and all 119 frontend tests pass.
+The frontend displays the exact duration ceiling from the existing failed-analysis response (`download_limits.max_duration`), rather than hiding it behind "allowed duration." The code and analysis stage remain visible. Missing, fractional, nonpositive, nonfinite, unsafe or nonnumeric limits retain safe generic guidance. Only the duration allowance changed: file-size, active/daily-job, rate, retention, execution-time and source restrictions remain enforced. A two-hour source may still exceed the 100 MB guest or 500 MB account size ceiling. Help and setup instructions describe the updated defaults.
+
+Offline regression coverage accepts exactly 7,200 seconds and rejects 7,201 seconds at the API and final FFprobe-validation stages; oversized output is not uploaded and temporary files are cleaned. Stored stricter policies and existing byte/job controls remain covered. Production Docker images built, backend 282 tests/Ruff passed, and frontend production build/lint/all 119 tests passed.
+
+The complete YouTube URL subsequently supplied by the user was analyzed through a one-off worker using the updated policy, real provider-registry rules and normal guarded yt-dlp extraction. Analysis succeeded: reported duration 5,305 seconds (1 hour 28 minutes 25 seconds), 12 video choices and 2 audio choices. This confirms metadata extraction and duration eligibility for that link; its full media was not downloaded and an entire two-hour transfer is not claimed tested.
+
+The live API ingress was paused while existing work drained, then the API, worker and scheduler were recreated with the matching built images and private environment. All three services confirmed a 7,200-second guest/account policy, the original byte/job/runtime controls, and public HTTPS health/CORS through the same tunnel. A fresh Chrome guest session then reached the supplied link's format-selection screen on Netlify; the screenshot showed its 88:25 duration and 12 selection options. There were zero preparation requests. The synthetic guest was deleted after this analysis-only check. No live access restriction or certificate check was bypassed.
 
 ## Distribution contents
 

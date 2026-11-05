@@ -64,5 +64,5 @@ def test_guest_limits_are_written_to_the_sanitized_child_request(tmp_path):
     with patch("app.tasks.settings", return_value=config), patch("app.tasks.subprocess.Popen", side_effect=child):
         run_media({"mode": "analyze", "url": "https://example.com/v", "policy": media_policy(True)})
     assert captured["max_bytes"] == 100 * 1024 * 1024
-    assert captured["max_duration"] == 900
+    assert captured["max_duration"] == 7200
     assert captured["require_duration"] is True

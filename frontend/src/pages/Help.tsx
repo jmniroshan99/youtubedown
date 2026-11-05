@@ -25,7 +25,7 @@ export default function Help() {
     ],
     [
       "What are the guest limits?",
-      "Defaults are one active job, five downloads per UTC day, 100 MB per file and 15 minutes per video. Analysis and shared-network limits also apply. The site owner can adjust these limits. Guest videos must have a known duration.",
+      "Defaults are one active job, five downloads per UTC day, 100 MB per file and two hours per video. Analysis and shared-network limits also apply. The site owner can adjust these limits. Guest videos must have a known duration. A video within the duration limit can still exceed the file-size limit; choose a smaller available format when needed.",
     ],
     [
       "Does every website work?",

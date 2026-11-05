@@ -34,4 +34,6 @@ This retrieves MediaElement's public Big Buck Bunny sample, prepares MP4 and MP3
 
 An alternative permitted public URL can be supplied through `-MediaUrl`. Source 403, login, age verification, regional, paywall and bot restrictions are terminal access failures, with safe error categories; the test does not bypass them. Never supply private/login-only media for this check.
 
+The requested duration ceiling is two hours for guests and signed-in accounts. For an existing installation, set both `MAX_VIDEO_DURATION_SECONDS=7200` and `GUEST_MAX_VIDEO_DURATION_SECONDS=7200` in the private backend environment, then recreate API/worker/scheduler when idle. Use the same values in each service. Reanalyze links rejected under an older policy. File-size, daily/active-job and runtime limits remain enforced; see [GUEST_ACCESS.md](GUEST_ACCESS.md).
+
 See [WEBSITE_SUPPORT_VERIFICATION.md](WEBSITE_SUPPORT_VERIFICATION.md) for results and limitations. The older verification document records earlier releases.

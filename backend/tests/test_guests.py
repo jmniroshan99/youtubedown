@@ -146,7 +146,7 @@ def test_guest_policy_reaches_atomic_redis_reservation():
         payload = store.return_value.reserve.call_args.kwargs
         assert (payload["max_active"], payload["daily_limit"]) == (1, 5)
         assert payload["spec"]["_policy"]["max_bytes"] == 100 * 1024 * 1024
-        assert payload["spec"]["_policy"]["max_duration"] == 900
+        assert payload["spec"]["_policy"]["max_duration"] == 7200
         assert payload["spec"]["_policy"]["retention_seconds"] == 1800
 
 
@@ -155,6 +155,27 @@ def test_stored_policy_cannot_be_relaxed_on_retry_or_by_configuration():
     assert media_policy(False, initial) == initial
     with patch("app.guest.settings", return_value=Settings(guest_max_file_size_mb=10)):
         assert media_policy(False, initial)["max_bytes"] == 10 * 1024 * 1024
+
+
+def test_two_hour_defaults_keep_guest_byte_and_retention_limits():
+    config = Settings()
+    assert config.max_video_duration_seconds == 7200
+    assert config.guest_max_video_duration_seconds == 7200
+    with patch("app.guest.settings", return_value=config):
+        guest, account = media_policy(True), media_policy(False)
+    assert guest["max_duration"] == account["max_duration"] == 7200
+    assert guest["max_bytes"] == 100 * 1024 * 1024
+    assert account["max_bytes"] == 500 * 1024 * 1024
+    assert guest["retention_seconds"] == 1800
+    assert (config.guest_max_active_jobs, config.guest_daily_job_quota, config.job_timeout_seconds) == (1, 5, 1800)
+
+
+def test_new_duration_defaults_cannot_relax_a_stored_guest_ceiling():
+    stored = {"guest": True, "max_duration": 900, "max_bytes": 50 * 1024 * 1024, "retention_seconds": 600}
+    with patch("app.guest.settings", return_value=Settings()):
+        assert media_policy(False, stored) == stored
+    with patch("app.guest.settings", return_value=Settings(max_video_duration_seconds=600)):
+        assert media_policy(True, stored)["max_duration"] == 600
 
 
 @pytest.fixture
@@ -304,7 +325,7 @@ def test_health_identifies_failed_component(component, expected):
         assert client.get("/health").json()["status"] == expected
 
 
-@pytest.mark.parametrize("duration,size,expected", [(None, 1, 400), (901, 1, 400), (10, 105 * 1024 * 1024, 413)])
+@pytest.mark.parametrize("duration,size,expected", [(None, 1, 400), (7201, 1, 400), (10, 105 * 1024 * 1024, 413)])
 def test_guest_download_rejects_media_outside_limits(guest_client, duration, size, expected):
     data = {"status": "completed", "duration": duration, "formats": [{"id": "format", "size": size}]}
     with (
@@ -318,6 +339,59 @@ def test_guest_download_rejects_media_outside_limits(guest_client, duration, siz
             "/api/downloads", json={"analysis_id": str(uuid4()), "format_id": "format", "idempotency_key": str(uuid4())}
         )
         assert response.status_code == expected
+        create.assert_not_called()
+
+
+@pytest.mark.parametrize("duration,expected", [(7200, 202), (7201, 400)])
+def test_guest_two_hour_duration_boundary_preserves_size_quota(guest_client, duration, expected):
+    data = {
+        "status": "completed",
+        "duration": duration,
+        "url": "https://example.com/public.mp4",
+        "title": "Duration boundary fixture",
+        "platform": "Fixture",
+        "formats": [{"id": "format", "size": 100 * 1024 * 1024}],
+    }
+    with (
+        patch("app.main.cache") as redis,
+        patch("app.main.rate"),
+        patch("app.main.guest_rate"),
+        patch("app.main.reserve") as create,
+    ):
+        redis.return_value.get.return_value = json.dumps(data)
+        create.return_value = {"id": str(uuid4()), "status": "queued"}
+        response = guest_client.post(
+            "/api/downloads", json={"analysis_id": str(uuid4()), "format_id": "format", "idempotency_key": str(uuid4())}
+        )
+        assert response.status_code == expected
+        if expected == 202:
+            policy = create.call_args.args[4]["_policy"]
+            assert policy["max_duration"] == 7200
+            assert policy["max_bytes"] == 100 * 1024 * 1024
+        else:
+            assert response.json()["error"]["code"] == "DURATION_LIMIT"
+            create.assert_not_called()
+
+
+def test_guest_duration_update_does_not_relax_an_existing_analysis(guest_client):
+    data = {
+        "status": "completed",
+        "duration": 901,
+        "policy": {"guest": True, "max_duration": 900},
+        "formats": [{"id": "format", "size": 1}],
+    }
+    with (
+        patch("app.main.cache") as redis,
+        patch("app.main.rate"),
+        patch("app.main.guest_rate"),
+        patch("app.main.reserve") as create,
+    ):
+        redis.return_value.get.return_value = json.dumps(data)
+        response = guest_client.post(
+            "/api/downloads", json={"analysis_id": str(uuid4()), "format_id": "format", "idempotency_key": str(uuid4())}
+        )
+        assert response.status_code == 400
+        assert response.json()["error"]["code"] == "DURATION_LIMIT"
         create.assert_not_called()
 
 

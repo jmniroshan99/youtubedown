@@ -7,6 +7,7 @@ from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
 import fakeredis
+import pytest
 
 from app import tasks
 from app.config import Settings
@@ -95,6 +96,38 @@ def test_download_uses_temporary_store_and_tracks_before_upload(tmp_path):
     database.event.assert_not_called()
     database.insert.assert_not_called()
     database.patch.assert_not_called()
+    assert not file.exists()
+
+
+@pytest.mark.parametrize("duration,expected", [(7200, "completed"), (7201, "failed")])
+def test_final_media_duration_is_checked_at_two_hour_boundary_before_upload(tmp_path, duration, expected):
+    job = queued_job()
+    file = tmp_path / "duration-boundary.mp4"
+    file.write_bytes(b"small fixture")
+    store, database, redis = MagicMock(), MagicMock(), MagicMock()
+    store.job.return_value = job
+    store.update_job.return_value = [job]
+    redis.lock.return_value.acquire.return_value = True
+    redis.get.return_value = None
+    with (
+        patch("app.tasks.JobStore", return_value=store),
+        patch("app.tasks.Database", return_value=database),
+        patch("app.tasks.cache", return_value=redis),
+        patch("app.tasks.select_provider", return_value={"id": None, "adapter_key": "direct"}),
+        patch("app.tasks.run_media", return_value=file),
+        patch(
+            "app.tasks.subprocess.run",
+            return_value=subprocess.CompletedProcess([], 0, json.dumps({"format": {"duration": str(duration)}}).encode()),
+        ),
+    ):
+        tasks.download.run(job["id"])
+    states = [call.kwargs for call in store.update_job.call_args_list]
+    assert any(state.get("status") == expected for state in states)
+    if expected == "completed":
+        database.upload.assert_called_once()
+    else:
+        database.upload.assert_not_called()
+        assert any(state.get("error_code") == "MEDIA_LIMIT" and state.get("error_stage") == "validation" for state in states)
     assert not file.exists()
 
 

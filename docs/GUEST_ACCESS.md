@@ -35,13 +35,15 @@ A guest workspace shows a clear notice: clearing browser data, ending the sessio
 | Active jobs | 1 | 2 |
 | Jobs per UTC day | 5 | 20 |
 | File size | 100 MB | 500 MB |
-| Video duration | 900 seconds, verified | 3,600 seconds |
+| Video duration | 7,200 seconds (two hours), verified | 7,200 seconds (two hours) |
 | File retention after upload | 30 minutes | 60 minutes |
 | Analysis per identity | 2/minute and 20/day | Existing 8/minute |
 | Analysis per shared network | 8/minute and 100/day | Not applied |
 | Create/retry attempts per shared network | 6/minute and 20/day | Not applied |
 
 MB limits use 1,048,576 bytes per MB. Guest media/job limits are capped by the general server limits, even if a guest setting is higher. HTTP 429 responses include Retry-After for guest rate budgets. The UI displays a wait estimate and does not automatically retry job creation.
+
+Set both `MAX_VIDEO_DURATION_SECONDS=7200` and `GUEST_MAX_VIDEO_DURATION_SECONDS=7200` for the requested two-hour ceiling. Existing backend `.env` files keep their explicit values; update them on the backend only and recreate the API, worker and scheduler after active tasks finish. Fresh analysis uses the new ceiling; existing analysis/job policy snapshots retain any stricter original limit. Reanalyze a previously rejected link. The duration allowance does not remove the 100 MB guest or 500 MB account file-size ceiling, or the execution timeout; choose a smaller available format when needed.
 
 The shared-network create limit counts attempts, including retries and repeated idempotency keys; the Redis per-user job quota counts actual unique reservations. These are different protections. Failed/cancelled jobs and current-job deletion do not refund the daily job quota. Minute/day rate windows use UTC epoch boundaries. NAT users may share an allowance.
 

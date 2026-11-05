@@ -12,7 +12,7 @@ class Settings(BaseSettings):
     allowed_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
     media_proxy: str = "http://egress:8080"
     max_file_size_mb: int = 500
-    max_video_duration_seconds: int = 3600
+    max_video_duration_seconds: int = Field(default=7200, ge=1)
     max_active_jobs_per_user: int = 2
     daily_job_quota: int = 20
     file_retention_hours: int = 1
@@ -26,7 +26,7 @@ class Settings(BaseSettings):
 
     guest_access_enabled: bool = True
     guest_max_file_size_mb: int = Field(default=100, ge=1)
-    guest_max_video_duration_seconds: int = Field(default=900, ge=1)
+    guest_max_video_duration_seconds: int = Field(default=7200, ge=1)
     guest_max_active_jobs: int = Field(default=1, ge=1)
     guest_daily_job_quota: int = Field(default=5, ge=1)
     guest_file_retention_minutes: int = Field(default=30, ge=1)
