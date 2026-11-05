@@ -5,7 +5,7 @@ import { api, errorMessage, type Analysis, type Format, type Job } from "./lib";
 import { isAbort } from "./hooks";
 import { privateKey } from "./queryClient";
 import { savePreparedVideo } from "./downloadFile";
-import { mediaFailureMessage } from "./mediaErrors";
+import { mediaFailureMessage, mediaFailureReference } from "./mediaErrors";
 
 export function videoURL(value: string) {
   try {
@@ -22,12 +22,12 @@ export function suggestedVideoFormat(analysis: Analysis): { format?: Format; not
   const maximum = analysis.download_limits?.max_bytes ?? Infinity;
   const compatible = analysis.formats.filter((f) =>
     f.kind === "video" && f.has_audio === true &&
-    (f.height != null && f.height <= 1080) &&
+    f.height != null &&
     (f.size ?? f.estimated_size ?? 0) <= maximum,
   );
   const sorted = (ext: string, height = 1080) => compatible.filter((f) => f.ext === ext && (f.height ?? 0) <= height)
     .sort((a, b) => (b.height ?? 0) - (a.height ?? 0));
-  const format = sorted("mp4", 720)[0] ?? sorted("mp4")[0] ?? sorted("webm", 720)[0] ?? sorted("webm")[0];
+  const format = sorted("mp4", 720)[0] ?? sorted("mp4")[0] ?? sorted("mp4", Infinity)[0] ?? sorted("webm", 720)[0] ?? sorted("webm")[0];
   if (!format) return { note: "Choose an available format and select Download. No download starts until you request it." };
   const note = [
     format.ext !== "mp4" ? "MP4 with audio is unavailable within your limits. WebM is suggested instead; you can choose another available format." : "A smaller MP4 with audio is suggested for a lighter download. Choose your preferred quality before downloading.",
@@ -44,7 +44,7 @@ function selectableFormats(analysis: Analysis, kind: Format["kind"]) {
 function suggestedFormat(analysis: Analysis, kind: Format["kind"]) {
   const formats = selectableFormats(analysis, kind);
   if (kind === "audio") return formats.find((format) => format.ext === "mp3") ?? formats[0];
-  return suggestedVideoFormat(analysis).format ?? formats[0];
+  return suggestedVideoFormat(analysis).format ?? formats.find((format) => format.ext === "mp4" && format.has_audio === true) ?? formats[0];
 }
 
 function expiredRequest(error: unknown) {
@@ -89,9 +89,11 @@ export function useAutoDownload() {
   const [kind, setKind] = useState<Format["kind"]>("video");
   const [phase, setPhase] = useState("idle");
   const [error, setError] = useState("");
+  const [diagnostic, setDiagnostic] = useState("");
   const [note, setNote] = useState("");
   const [downloadStarted, setDownloadStarted] = useState(false);
   const [saving, setSaving] = useState(false);
+  const savePending = useRef(false);
   const current = useRef<Action | undefined>(undefined);
   const input = useRef("");
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -145,6 +147,7 @@ export function useAutoDownload() {
       await savePreparedVideo(next.id, signal);
       if (mounted.current && current.current === action) setDownloadStarted(true);
     } else if (next.status === "failed") {
+      setDiagnostic(mediaFailureReference(next.error_code, next.error_stage ?? "download"));
       throw new Error(mediaFailureMessage(next.error_code, "download"));
     }
   }, [query]);
@@ -179,7 +182,7 @@ export function useAutoDownload() {
     const action: Action = { url: normalized, controller: new AbortController(), key: crypto.randomUUID() };
     current.current = action;
     const signal = action.controller.signal;
-    setAnalysis(undefined); setAnalysisId(""); setJob(undefined); setSelected(""); setError(""); setNote(""); setDownloadStarted(false); setPhase("starting");
+    setAnalysis(undefined); setAnalysisId(""); setJob(undefined); setSelected(""); setError(""); setDiagnostic(""); setNote(""); setDownloadStarted(false); setPhase("starting");
     try {
       await ensure.current();
       signal.throwIfAborted();
@@ -199,7 +202,10 @@ export function useAutoDownload() {
         await pause(2000, signal);
       }
       signal.throwIfAborted();
-      if (result.status !== "completed") throw new Error(mediaFailureMessage(result.error_code));
+      if (result.status !== "completed") {
+        setDiagnostic(mediaFailureReference(result.error_code, result.error_stage ?? "analysis"));
+        throw new Error(mediaFailureMessage(result.error_code));
+      }
       setAnalysis(result);
       const nextKind = selectableFormats(result, "video").length ? "video" : "audio";
       const choice = suggestedVideoFormat(result);
@@ -219,7 +225,7 @@ export function useAutoDownload() {
     input.current = value;
     clearTimeout(timer.current);
     cancelPrevious(); current.current = undefined;
-    setAnalysis(undefined); setAnalysisId(""); setJob(undefined); setError(""); setNote(""); setDownloadStarted(false); setPhase("idle");
+    setAnalysis(undefined); setAnalysisId(""); setJob(undefined); setError(""); setDiagnostic(""); setNote(""); setDownloadStarted(false); setPhase("idle");
     if (videoURL(value)) timer.current = setTimeout(() => void run(value), 600);
   }, [cancelPrevious, run]);
 
@@ -271,22 +277,35 @@ export function useAutoDownload() {
     finally { action.preparing = false; }
   }, [fail, follow, prepare, run]);
 
+  const save = useCallback(async () => {
+    const action = current.current;
+    if (!action?.job || savePending.current) return;
+    savePending.current = true;
+    setSaving(true); setError("");
+    try {
+      await savePreparedVideo(action.job.id, action.controller.signal);
+      if (mounted.current && current.current === action) setDownloadStarted(true);
+    } catch (exc) { if (!isAbort(exc)) fail(action, exc); }
+    finally { savePending.current = false; if (mounted.current) setSaving(false); }
+  }, [fail]);
+
   const prepareSelected = useCallback(async () => {
     const old = current.current;
     const format = analysis && selectableFormats(analysis, kind).find((f) => f.id === selected);
     if (!old?.analysisId || !format || old.preparing || (old.job && active.has(old.job.status))) return;
+    if (old.job?.status === "completed" && old.format?.id === format.id) { await save(); return; }
     old.controller.abort();
     const action: Action = { url: old.url, analysisId: old.analysisId, controller: new AbortController(), key: !old.job && old.format?.id === format.id ? old.key : crypto.randomUUID() };
     action.preparing = true;
     current.current = action;
-    setJob(undefined); setError(""); setDownloadStarted(false); setPhase("creating");
+    setJob(undefined); setError(""); setDiagnostic(""); setDownloadStarted(false); setPhase("creating");
     try {
       const session = await ensure.current();
       action.controller.signal.throwIfAborted();
       await prepare(action, format, session.user.id);
     } catch (exc) { fail(action, exc); }
     finally { action.preparing = false; }
-  }, [analysis, fail, kind, prepare, selected]);
+  }, [analysis, fail, kind, prepare, save, selected]);
 
   const changeKind = useCallback((nextKind: Format["kind"]) => {
     if (!analysis || current.current?.preparing) return;
@@ -295,16 +314,6 @@ export function useAutoDownload() {
     setNote(nextKind === "video" ? suggestedVideoFormat(analysis).note : "Choose an available audio format, then select Download audio. The video will not be included.");
   }, [analysis]);
 
-  const save = useCallback(async () => {
-    const action = current.current;
-    if (!action?.job) return;
-    setSaving(true); setError("");
-    try {
-      await savePreparedVideo(action.job.id, action.controller.signal);
-      if (mounted.current) setDownloadStarted(true);
-    } catch (exc) { if (!isAbort(exc)) fail(action, exc); }
-    finally { if (mounted.current) setSaving(false); }
-  }, [fail]);
-
-  return { url, changeURL, run: () => run(input.current), analysis, analysisId, job, selected, setSelected, kind, changeKind, formats: analysis ? selectableFormats(analysis, kind) : [], phase, error, note, downloadStarted, saving, save, cancel, retry, prepareSelected, processing: ["starting", "analyzing", "creating", ...active].includes(phase) };
+  const reusePrepared = job?.status === "completed" && current.current?.format?.id === selected;
+  return { url, changeURL, run: () => run(input.current), analysis, analysisId, job, selected, setSelected, kind, changeKind, formats: analysis ? selectableFormats(analysis, kind) : [], phase, error, diagnostic, note, downloadStarted, saving, save, cancel, retry, prepareSelected, reusePrepared, processing: ["starting", "analyzing", "creating", ...active].includes(phase) };
 }

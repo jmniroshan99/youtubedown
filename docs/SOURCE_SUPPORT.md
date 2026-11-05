@@ -1,5 +1,7 @@
 # Website compatibility
 
+Updated 5 November 2026: [current evidence and verification](WEBSITE_SUPPORT_VERIFICATION.md) and [English setup](WEBSITE_SUPPORT_SETUP.md) supersede the older verification limits below. Pornhub/xHamster dedicated URL paths have offline fixtures; live compatibility is not claimed.
+
 youtubedown cannot guarantee downloads from every website. It checks the pasted public URL with the installed yt-dlp extractors, including generic media detection. The Video sources page is a registry of configured examples and administrator rules, not an exhaustive whitelist.
 
 ## Supported paths

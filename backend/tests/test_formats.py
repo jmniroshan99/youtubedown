@@ -16,7 +16,7 @@ def test_available_formats_only_and_audio_merge():
     video = result["formats"][0]
     assert video["height"] == 720
     assert video["merging"] is True
-    assert video["_selector"] == "v+bestaudio[ext=m4a]"
+    assert video["_selector"] == "v+a"
     assert not any(f.get("height") == 1080 for f in result["formats"])
     assert any(f["id"] == "audio-mp3" for f in result["formats"])
 

@@ -5,12 +5,14 @@ const messages: Record<string, string> = {
   SOURCE_DISABLED: "This source has been disabled by the site administrator.",
   ADAPTER_UNAVAILABLE: "This source needs a server adapter that is not available yet.",
   LOGIN_REQUIRED: "The source requires its own account. This video cannot be retrieved as a public link.",
+  PAYWALL_RESTRICTED: "The source requires a purchase or subscription. This video is not publicly downloadable.",
   AGE_RESTRICTED: "The source restricts access to this video. Use a publicly accessible video.",
   SOURCE_BLOCKED: "The source blocked the media request. Try again later or choose another source.",
   SOURCE_RATE_LIMITED: "The source is limiting requests. Wait before trying again.",
   SOURCE_UNAVAILABLE: "This video is unavailable at its source. Check the original video page.",
   REGION_RESTRICTED: "The source restricts this video by region, so this server cannot retrieve it.",
   SOURCE_NETWORK_ERROR: "The video source could not be reached. Check the connection and try again.",
+  SOURCE_TLS_ERROR: "The server could not verify the source's HTTPS certificate. Ask the site administrator to check the network's HTTPS inspection and certificate trust configuration.",
   MULTIPLE_VIDEOS: "This page contains several videos. Paste the direct link to one video.",
   PLAYLIST: "Paste one video's link instead of a playlist.",
   PLAYLIST_UNSUPPORTED: "Paste one video's link instead of a playlist.",
@@ -26,7 +28,19 @@ const messages: Record<string, string> = {
   TIME_LIMIT: "Preparation took too long. Try a smaller format or another source.",
   OUTPUT_INVALID: "The source returned an unusable media file. Try another available format.",
   EGRESS_NOT_CONFIGURED: "The server's protected source connection is unavailable. Please contact the site owner.",
+  EXTRACTOR_VERSION_MISMATCH: "The server's media components need to be rebuilt together. Please contact the site owner.",
+  SERVICE_UNAVAILABLE: "The download backend is temporarily unavailable. Check the service connection and retry.",
+  WORKER_INTERRUPTED: "The processing worker stopped before the file was ready. Please retry.",
+  QUEUE_TIMEOUT: "The download worker did not start this request in time. Check the service connection and retry.",
 };
+
+const stages = new Set(["analysis", "routing", "downloading", "processing", "validation", "uploading", "download"]);
+const genericCodes = new Set(["EXTRACTION_FAILED", "ANALYSIS_FAILED", "PROCESSING_FAILED", "TIME_LIMIT", "ANALYSIS_EXPIRED"]);
+
+export function mediaFailureReference(code?: string | null, stage = "analysis") {
+  const safeCode = code && (Object.hasOwn(messages, code) || genericCodes.has(code)) ? code : "EXTRACTION_FAILED";
+  return `Reference: ${safeCode} · Stage: ${stages.has(stage) ? stage : "download"}`;
+}
 
 export function mediaFailureMessage(code: string | null | undefined, stage: MediaFailureStage = "analysis") {
   if (code && Object.hasOwn(messages, code)) return messages[code];

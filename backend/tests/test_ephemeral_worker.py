@@ -125,7 +125,7 @@ def test_partial_upload_failure_retains_cleanup_pointer_if_deletion_fails(tmp_pa
     assert store.track_file.call_count == 2
     assert store.track_file.call_args_list[-1].args[2] < store.track_file.call_args_list[0].args[2]
     store.untrack_file.assert_not_called()
-    store.update_job.assert_any_call(job["id"], status="failed", error_code="PROCESSING_FAILED", progress=None)
+    store.update_job.assert_any_call(job["id"], status="failed", error_code="PROCESSING_FAILED", error_stage="uploading", progress=None)
     assert not file.exists()
 
 

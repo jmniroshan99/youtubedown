@@ -12,4 +12,12 @@
 .DS_Store
 *.zip
 
+diagnost
+.env.local
+
+# Keep all local environment variants, diagnostics and Netlify state out of Git.
+**/.env*
+!**/.env.example
+!**/.env.*.example
 diagnostics.txt
+**/.netlify/

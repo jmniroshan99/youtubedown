@@ -1,7 +1,11 @@
 """Credential-free worker-to-egress diagnostic. No video/page is downloaded."""
 
+import argparse
 import http.client
+import ssl
 from urllib.parse import urlsplit
+
+import certifi
 
 from .config import settings
 
@@ -47,5 +51,61 @@ def check(proxy_url):
     return all(status == expected for _, status, expected in results)
 
 
+def tls_status(proxy_url, host, connection_factory=http.client.HTTPSConnection):
+    """Verified HEAD through CONNECT. No page/video body or raw diagnostics leave this check."""
+    connection = None
+    try:
+        proxy = urlsplit(proxy_url)
+        port = proxy.port or 80
+        if proxy.scheme != "http" or not proxy.hostname or proxy.username or proxy.password:
+            return "PROXY_CONFIGURATION"
+        # Match yt-dlp's pinned CA bundle. Do not trust an intercepted leaf or
+        # disable verification to turn a certificate failure into apparent success.
+        context = ssl.create_default_context(cafile=certifi.where())
+        connection = connection_factory(proxy.hostname, port, timeout=12, context=context)
+        connection.set_tunnel(host, 443)
+        connection.request("HEAD", "/", headers={"Host": host, "Connection": "close"})
+        response = connection.getresponse()
+        if response.status == 401:
+            return "LOGIN_REQUIRED"
+        if response.status == 403:
+            return "SOURCE_BLOCKED"
+        if response.status == 429:
+            return "SOURCE_RATE_LIMITED"
+        if response.status >= 500:
+            return "SOURCE_UNAVAILABLE"
+        return "HTTPS_REACHABLE"
+    except ssl.SSLCertVerificationError:
+        return "SOURCE_TLS_ERROR"
+    except ssl.SSLError:
+        return "TLS_HANDSHAKE_ERROR"
+    except TimeoutError:
+        return "CONNECTION_TIMEOUT"
+    except ValueError:
+        return "PROXY_CONFIGURATION"
+    except (OSError, http.client.HTTPException):
+        return "SOURCE_NETWORK_ERROR"
+    finally:
+        if connection is not None:
+            connection.close()
+
+
+def check_tls(proxy_url):
+    results = [
+        ("Control HTTPS certificate and response", tls_status(proxy_url, "www.youtube.com")),
+        ("xHamster HTTPS certificate and response", tls_status(proxy_url, "xhamster.com")),
+        ("Pornhub HTTPS certificate and response", tls_status(proxy_url, "www.pornhub.com")),
+    ]
+    for label, status in results:
+        print(f"{'PASS' if status == 'HTTPS_REACHABLE' else 'FAIL'}: {label} ({status}).")
+    return all(status == "HTTPS_REACHABLE" for _, status in results)
+
+
 if __name__ == "__main__":
-    raise SystemExit(0 if check(settings().media_proxy) else 1)
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--tls", action="store_true", help="Also verify fixed source HTTPS HEAD connections")
+    arguments = parser.parse_args()
+    healthy = check(settings().media_proxy)
+    if arguments.tls:
+        healthy = check_tls(settings().media_proxy) and healthy
+    raise SystemExit(0 if healthy else 1)

@@ -147,6 +147,6 @@ def test_worker_download_reaches_guarded_media_process_without_external_dns(unav
     assert media.call_args.args[0]["mode"] == "download"
     assert media.call_args.args[0]["format"] == job["format_spec"]
     store.return_value.update_job.assert_any_call(
-        job_id, status="failed", error_code="EXTRACTION_FAILED", progress=None
+        job_id, status="failed", error_code="EXTRACTION_FAILED", error_stage="downloading", progress=None
     )
     redis.return_value.lock.return_value.release.assert_called_once()

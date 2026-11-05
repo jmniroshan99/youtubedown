@@ -215,7 +215,10 @@ def analysis_result(analysis_id: UUID, user: User):
     result = json.loads(data)
     if result.get("formats"):
         result["formats"] = [{k: v for k, v in f.items() if not k.startswith("_")} for f in result["formats"]]
-    public = {k: v for k, v in result.items() if k not in {"adapter", "policy"}}
+    public = {k: v for k, v in result.items() if k in {
+        "status", "analysis_id", "title", "duration", "platform", "formats", "provider_id",
+        "error_code", "error_stage", "extractor_version",
+    }}
     policy = media_policy(bool(user.get("is_anonymous")), result.get("policy"))
     public["download_limits"] = {"max_bytes": policy["max_bytes"], "max_duration": policy["max_duration"]}
     return public

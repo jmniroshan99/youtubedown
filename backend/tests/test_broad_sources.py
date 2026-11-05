@@ -28,7 +28,7 @@ def test_unknown_public_host_uses_normal_extractors_without_registry_writes():
     with patch("app.providers.Database") as database:
         database.return_value.rows.return_value = []
         selected = select_provider("https://videos.fixture.example/watch/1")
-    assert selected == {"id": None, "name": "Automatic detection", "adapter_key": "yt_dlp"}
+    assert selected == {"id": None, "name": "Automatic detection", "adapter_key": "yt_dlp", "_source_rules": []}
     database.return_value.rows.assert_called_once_with("video_providers")
     database.return_value.insert.assert_not_called()
 

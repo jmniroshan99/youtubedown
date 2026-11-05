@@ -23,7 +23,7 @@ import { activeStatuses, useDownloadJobs } from "../downloadQueries";
 import { isAbort, useRequestLifetime } from "../hooks";
 import { privateKey } from "../queryClient";
 import { savePreparedVideo } from "../downloadFile";
-import { mediaFailureMessage } from "../mediaErrors";
+import { mediaFailureMessage, mediaFailureReference } from "../mediaErrors";
 export default function Downloads() {
   const { session } = useApp();
   const query = useQueryClient();
@@ -33,10 +33,13 @@ export default function Downloads() {
   const [busy, setBusy] = useState("");
   const [message, setMessage] = useState("");
   const retryKeys = useRef(new Map<string, string>());
+  const pending = useRef(new Set<string>());
   const userId = session?.user.id ?? "";
   const jobs = useDownloadJobs(userId, offset);
   const requestSignal = useRequestLifetime();
   async function action(job: Job, type: string) {
+    if (pending.current.has(job.id)) return;
+    pending.current.add(job.id);
     setBusy(job.id);
     setError("");
     setMessage("");
@@ -66,6 +69,7 @@ export default function Downloads() {
     } catch (exc) {
       if (!isAbort(exc)) setError(errorMessage(exc));
     } finally {
+      pending.current.delete(job.id);
       setBusy("");
     }
   }
@@ -192,6 +196,7 @@ export default function Downloads() {
                 {job.error_code && (
                   <p className="job-error">
                     {mediaFailureMessage(job.error_code, "download")}
+                    <br />{mediaFailureReference(job.error_code, job.error_stage ?? "download")}
                   </p>
                 )}
                 {job.status === "completed" && job.expires_at && (

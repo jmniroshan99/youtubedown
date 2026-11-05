@@ -122,6 +122,23 @@ describe("choose before downloading", () => {
     expect(mocks.api.mock.calls.filter(([p]) => p === "/api/downloads")).toHaveLength(1);
     expect(HTMLAnchorElement.prototype.click).toHaveBeenCalledOnce();
   });
+  it("reuses the prepared file when Download is clicked again with the same selection", async () => {
+    const view = setup();
+    await analyze(view);
+    await act(async () => view.result.current.prepareSelected());
+    expect(view.result.current.reusePrepared).toBe(true);
+    await act(async () => view.result.current.prepareSelected());
+    expect(mocks.api.mock.calls.filter(([path]) => path === "/api/downloads")).toHaveLength(1);
+    expect(mocks.api.mock.calls.filter(([path]) => path.endsWith("/file"))).toHaveLength(2);
+  });
+  it("coalesces rapid Save file clicks into one browser download request", async () => {
+    const view = setup();
+    await analyze(view);
+    await act(async () => view.result.current.prepareSelected());
+    const before = mocks.api.mock.calls.filter(([path]) => path.endsWith("/file")).length;
+    await act(async () => { await Promise.all([view.result.current.save(), view.result.current.save()]); });
+    expect(mocks.api.mock.calls.filter(([path]) => path.endsWith("/file"))).toHaveLength(before + 1);
+  });
   it("reuses creation idempotency after an ambiguous network failure", async () => {
     let attempts = 0;
     const implementation = mocks.api.getMockImplementation()!;

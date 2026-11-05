@@ -1,13 +1,14 @@
 """The diagnostic checks CONNECT through the proxy, never resolves source DNS locally."""
 
 import socket
+import ssl
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from threading import Thread
 from unittest.mock import MagicMock, patch
 
 import pytest
 
-from app.egress_check import check, tunnel_status
+from app.egress_check import check, check_tls, tls_status, tunnel_status
 
 
 def test_tunnel_diagnostic_sends_destination_to_real_local_proxy_without_resolving_it():
@@ -114,3 +115,67 @@ def test_diagnostic_uses_fixed_targets_and_reports_only_known_statuses(capsys):
     assert "http://egress" not in output
     assert "www.youtube.com" not in output
     assert "169.254.169.254" not in output
+
+
+@pytest.mark.parametrize(
+    "status,expected",
+    [
+        (200, "HTTPS_REACHABLE"),
+        (302, "HTTPS_REACHABLE"),
+        (401, "LOGIN_REQUIRED"),
+        (403, "SOURCE_BLOCKED"),
+        (429, "SOURCE_RATE_LIMITED"),
+        (503, "SOURCE_UNAVAILABLE"),
+    ],
+)
+def test_https_diagnostic_enforces_verification_and_uses_only_head(status, expected):
+    factory = MagicMock()
+    factory.return_value.getresponse.return_value.status = status
+    assert tls_status("http://egress:8080", "source.example.com", factory) == expected
+    context = factory.call_args.kwargs["context"]
+    assert context.check_hostname is True
+    assert context.verify_mode == ssl.CERT_REQUIRED
+    factory.return_value.set_tunnel.assert_called_once_with("source.example.com", 443)
+    factory.return_value.request.assert_called_once_with(
+        "HEAD",
+        "/",
+        headers={"Host": "source.example.com", "Connection": "close"},
+    )
+    factory.return_value.close.assert_called_once()
+
+
+@pytest.mark.parametrize(
+    "failure,expected",
+    [
+        (ssl.SSLCertVerificationError(1, "private cert and URL"), "SOURCE_TLS_ERROR"),
+        (ssl.SSLError(1, "private TLS response"), "TLS_HANDSHAKE_ERROR"),
+        (TimeoutError("private details"), "CONNECTION_TIMEOUT"),
+        (OSError("private network details"), "SOURCE_NETWORK_ERROR"),
+    ],
+)
+def test_https_diagnostic_hides_transport_details_and_never_retries_insecurely(failure, expected):
+    factory = MagicMock()
+    factory.return_value.request.side_effect = failure
+    assert tls_status("http://egress:8080", "source.example.com", factory) == expected
+    factory.assert_called_once()
+    factory.return_value.request.assert_called_once()
+    factory.return_value.close.assert_called_once()
+
+
+@pytest.mark.parametrize("proxy", ["", "https://egress:8080", "http://user:secret@egress", "http://egress:invalid"])
+def test_https_diagnostic_rejects_invalid_proxy_before_connecting(proxy):
+    factory = MagicMock()
+    assert tls_status(proxy, "source.example.com", factory) == "PROXY_CONFIGURATION"
+    factory.assert_not_called()
+
+
+def test_optional_https_check_keeps_control_separate_from_source_certificate_failures(capsys):
+    with patch(
+        "app.egress_check.tls_status", side_effect=["HTTPS_REACHABLE", "SOURCE_TLS_ERROR", "SOURCE_TLS_ERROR"]
+    ) as probe:
+        assert check_tls("http://egress:8080") is False
+    assert [call.args[1] for call in probe.call_args_list] == ["www.youtube.com", "xhamster.com", "www.pornhub.com"]
+    output = capsys.readouterr().out
+    assert "PASS: Control HTTPS certificate and response (HTTPS_REACHABLE)" in output
+    assert "FAIL: xHamster HTTPS certificate and response (SOURCE_TLS_ERROR)" in output
+    assert "http://egress" not in output

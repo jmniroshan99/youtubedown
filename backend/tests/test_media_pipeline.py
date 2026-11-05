@@ -80,14 +80,21 @@ def test_direct_video_and_mp3_conversion(tmp_path, guest):
         analysis = invoke({**common, "mode": "analyze"})["data"]
         video = next(f for f in analysis["formats"] if f["kind"] == "video")
         mp3 = next(f for f in analysis["formats"] if f["id"] == "audio-mp3")
+        original_audio = next(f for f in analysis["formats"] if f["id"] == "audio-original")
         assert video["height"] == 180
-        for index, choice in enumerate([video, mp3]):
+        for index, choice in enumerate([video, original_audio, mp3]):
             directory = tmp_path / f"output{index}"
             directory.mkdir()
             result = invoke({**common, "mode": "download", "format": choice, "directory": str(directory)})
             path = Path(result["file"])
             assert path.exists() and path.stat().st_size > 1000
-            assert path.suffix == (".mp3" if choice["kind"] == "audio" else ".mp4")
+            assert path.suffix == "." + choice["ext"]
+            if choice["kind"] == "audio":
+                probe = subprocess.run(
+                    ["ffprobe", "-v", "error", "-show_entries", "stream=codec_type", "-of", "json", str(path)],
+                    capture_output=True, check=True,
+                )
+                assert {stream["codec_type"] for stream in json.loads(probe.stdout)["streams"]} == {"audio"}
         # Exercise both segmented protocols, including separate video/audio DASH tracks.
         for protocol in ["dash", "hls"]:
             manifest = fixture / ("manifest.mpd" if protocol == "dash" else "stream.m3u8")

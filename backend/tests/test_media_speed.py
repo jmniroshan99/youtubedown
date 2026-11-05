@@ -33,7 +33,7 @@ def downloader_stub(monkeypatch):
     captured = {}
 
     class Downloader:
-        def __init__(self, options):
+        def __init__(self, options, source_rules=()):
             captured.update(options)
 
         def __enter__(self):
@@ -50,7 +50,7 @@ def downloader_stub(monkeypatch):
                 "formats": [{"format_id": "18", "ext": "mp4", "vcodec": "h264", "acodec": "aac", "height": 180}],
             }
 
-    monkeypatch.setattr("app.extract.yt_dlp.YoutubeDL", Downloader)
+    monkeypatch.setattr("app.extract.PublicYoutubeDL", Downloader)
     monkeypatch.setattr("app.extract.emit", lambda _data: None)
     return captured
 

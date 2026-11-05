@@ -11,10 +11,13 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from uuid import UUID
 
+import httpx
+
 from .config import settings
 from .db import Database
 from .guest import media_policy
 from .jobs import JobStore
+from .media_runtime import YT_DLP_VERSION
 from .providers import UnsupportedProvider, select_provider
 from .queue import cache, celery
 from .security import validate_media_url as validate_url
@@ -151,10 +154,19 @@ def analyze(user_id, analysis_id, url=None, provider_test=None, policy=None):
             request = json.loads(raw)
             url, policy, provider_test = request["url"], request.get("policy"), request.get("provider_test")
         validate_url(url)
+        if provider_test and provider_test.get("enabled") is False:
+            raise UnsupportedProvider("This source has been disabled.", "SOURCE_DISABLED")
         provider = provider_test or select_provider(url)
         policy = media_policy(stored=policy)
         data = run_media(
-            {"mode": "analyze", "url": url, "adapter": provider["adapter_key"], "policy": policy}, timeout=120
+            {
+                "mode": "analyze",
+                "url": url,
+                "adapter": provider["adapter_key"],
+                "policy": policy,
+                "source_rules": provider.get("_source_rules", ()),
+            },
+            timeout=120,
         )
         data.update(
             {
@@ -164,6 +176,7 @@ def analyze(user_id, analysis_id, url=None, provider_test=None, policy=None):
                 "adapter": provider["adapter_key"],
                 "analysis_id": analysis_id,
                 "policy": policy,
+                "extractor_version": YT_DLP_VERSION,
             }
         )
         redis.setex(key, 900, json.dumps(data))
@@ -179,9 +192,11 @@ def analyze(user_id, analysis_id, url=None, provider_test=None, policy=None):
             if isinstance(exc, UnsupportedProvider)
             else str(exc)
             if isinstance(exc, MediaFailure)
+            else "SERVICE_UNAVAILABLE"
+            if isinstance(exc, httpx.HTTPError)
             else "ANALYSIS_FAILED"
         )
-        redis.setex(key, 900, json.dumps({"status": "failed", "error_code": code}))
+        redis.setex(key, 900, json.dumps({"status": "failed", "error_code": code, "error_stage": "analysis"}))
         if provider_test:
             Database().patch(
                 "video_providers",
@@ -233,6 +248,7 @@ def download(self, job_id):
         return
     file = None
     stored_path = None
+    stage = ["routing"]
     try:
         job = store.job(job_id)
         if not job or job["status"] in {"completed", "cancelled", "expired", "failed"}:
@@ -243,7 +259,7 @@ def download(self, job_id):
         if not store.update_job(job_id, status="downloading", progress=None, error_code=None):
             return
         last_update = [0.0]
-        stage = ["downloading"]
+        stage[0] = "downloading"
 
         def cancelled():
             return bool(redis.get(f"cancel:{job_id}")) or store.job(job_id) is None
@@ -251,6 +267,8 @@ def download(self, job_id):
         def progress(event):
             if event.get("type") == "stage":
                 stage[0] = "processing"
+            elif event.get("type") == "progress":
+                stage[0] = "downloading"
             if time.monotonic() - last_update[0] > 2:
                 store.update_job(
                     job_id,
@@ -268,12 +286,14 @@ def download(self, job_id):
                 "format": job["format_spec"],
                 "policy": policy,
                 "adapter": provider["adapter_key"],
+                "source_rules": provider.get("_source_rules", ()),
             },
             progress,
             cancelled,
         )
         if cancelled():
             raise MediaFailure("CANCELLED")
+        stage[0] = "validation"
         probe = subprocess.run(
             ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "json", str(file)],
             capture_output=True,
@@ -303,6 +323,7 @@ def download(self, job_id):
             job_id, status="uploading", storage_path=stored_path, progress=None, speed=None, eta=None
         ):
             raise MediaFailure("CANCELLED")
+        stage[0] = "uploading"
         database.upload(stored_path, file)
         if cancelled():
             raise MediaFailure("CANCELLED")
@@ -333,12 +354,14 @@ def download(self, job_id):
             if isinstance(exc, UnsupportedProvider)
             else str(exc)
             if isinstance(exc, MediaFailure)
+            else "SERVICE_UNAVAILABLE"
+            if isinstance(exc, httpx.HTTPError)
             else "PROCESSING_FAILED"
         )
         if code == "CANCELLED":
             store.cancel(job_id)
         else:
-            store.update_job(job_id, status="failed", error_code=code, progress=None)
+            store.update_job(job_id, status="failed", error_code=code, error_stage=stage[0], progress=None)
     finally:
         if file:
             file.unlink(missing_ok=True)

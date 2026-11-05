@@ -1,5 +1,7 @@
 # youtubedown 1.5.0 — Verification
 
+Historical release report. For the 5 November 2026 website-support update, use [WEBSITE_SUPPORT_VERIFICATION.md](WEBSITE_SUPPORT_VERIFICATION.md).
+
 Prepared on 2 November 2026. This report separates completed checks from live-service limits.
 
 ## Latest completed checks

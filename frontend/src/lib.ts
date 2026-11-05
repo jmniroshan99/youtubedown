@@ -154,6 +154,8 @@ export type Analysis = {
   analysis_id: string;
   status: string;
   error_code?: string;
+  error_stage?: string;
+  extractor_version?: string;
   title: string;
   duration?: number;
   platform: string;
@@ -173,6 +175,7 @@ export type Job = {
   eta?: number;
   file_size?: number;
   error_code?: string;
+  error_stage?: string;
   created_at: string;
   expires_at?: string;
 };

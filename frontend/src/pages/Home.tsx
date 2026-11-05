@@ -82,7 +82,7 @@ export default function Home({ serviceReady }: { serviceReady: boolean }) {
           </div>
         </form>
         {message && <Notice>{message}</Notice>}
-        {flow.error && <Notice kind="error">{flow.error}</Notice>}
+        {flow.error && <Notice kind="error">{flow.error}{flow.diagnostic && <p className="small-text">{flow.diagnostic}</p>}</Notice>}
         {["failed", "cancelled", "expired"].includes(flow.phase) && (
           <Button variant="secondary" size="small" onClick={() => void flow.retry()}><RefreshCw size={16} />Retry</Button>
         )}
@@ -116,8 +116,8 @@ export default function Home({ serviceReady }: { serviceReady: boolean }) {
               {flow.formats.map((format) => <option key={format.id} value={format.id}>{format.label}{format.size ? " · " + bytes(format.size) : format.estimated_size ? " · ~" + bytes(format.estimated_size) : " · Size unknown"}</option>)}
             </select>
             <div className="result-actions">
-              <p className="muted format-help">{choice?.merging ? "Video and audio will be merged without upscaling." : choice?.kind === "audio" ? "Audio only. The video will not be included." : choice?.has_audio === false ? "This source format contains video without audio." : "Original source quality, without upscaling."} Size: {choice?.size ? bytes(choice.size) : choice?.estimated_size ? "About " + bytes(choice.estimated_size) : "Unknown until processed"}</p>
-              <Button disabled={!choice || flow.processing} onClick={() => void flow.prepareSelected()}><Download size={17} />{flow.kind === "audio" ? "Download audio" : "Download video"}</Button>
+              <p className="muted format-help">{choice?.merging ? "Video and audio will be merged without upscaling." : choice?.kind === "audio" ? "Audio only. The video will not be included." : choice?.has_audio === false ? "This source format contains video without audio." : "Original source quality, without upscaling."} {choice?.kind === "video" && choice.ext !== "mp4" ? `This download keeps the ${choice.ext.toUpperCase()} container; a compatible player may be needed. ` : ""}Size: {choice?.size ? bytes(choice.size) : choice?.estimated_size ? "About " + bytes(choice.estimated_size) : "Unknown until processed"}</p>
+              <Button disabled={!choice || flow.processing || flow.saving} onClick={() => void flow.prepareSelected()}><Download size={17} />{flow.reusePrepared ? "Save prepared file" : flow.kind === "audio" ? "Download audio" : "Download video"}</Button>
             </div>
           </div>
           {(flow.job || flow.phase === "creating") && (

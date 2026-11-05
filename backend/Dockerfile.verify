@@ -1,0 +1,7 @@
+# Build the unchanged production runtime first: docker compose build worker
+FROM videoflow-worker:latest
+USER root
+COPY requirements-dev.txt /tmp/requirements-dev.txt
+RUN pip install --no-cache-dir -r /tmp/requirements-dev.txt
+USER 10001:10001
+WORKDIR /workspace/backend

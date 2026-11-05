@@ -1,5 +1,7 @@
 # Host could not be resolved while Service online (1.2.4)
 
+For source-specific certificate failures, run `diagnose-source-tls.bat` and read [SOURCE_TLS_DIAGNOSIS.md](SOURCE_TLS_DIAGNOSIS.md). A healthy backend and successful TCP connection do not imply that source TLS certificates can be verified.
+
 Run repair-downloads.bat after applying the complete source update. This rebuilds backend/egress code so destination DNS is checked at the guarded proxy instead of the internal-only API/worker. The API health endpoint tests core services, not every video website. See [CONNECTION_FIX.md](CONNECTION_FIX.md) for exact steps and source-connectivity checks.
 
 If localhost CORS passes but 127.0.0.1 fails, recreate the API with both base and local Compose files; the local override now supplies both origins without changing your saved environment. The updated diagnostic will not declare READY while either origin is rejected.

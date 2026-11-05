@@ -1,6 +1,8 @@
 """Reduce extractor failures to safe public codes, never raw URLs or messages."""
 
-from yt_dlp.networking.exceptions import HTTPError, RequestError
+import ssl
+
+from yt_dlp.networking.exceptions import CertificateVerifyError, HTTPError, RequestError
 from yt_dlp.utils import ExtractorError, GeoRestrictedError, UnsupportedError
 
 KNOWN_MEDIA_ERRORS = {
@@ -12,6 +14,8 @@ KNOWN_MEDIA_ERRORS = {
     "DURATION_UNKNOWN",
     "FILE_TOO_LARGE",
     "OUTPUT_INVALID",
+    "SOURCE_DISABLED",
+    "EXTRACTOR_VERSION_MISMATCH",
 }
 
 
@@ -29,6 +33,8 @@ def media_error_code(error):
             pending.append(info[1])
         pending.extend([getattr(current, "cause", None), current.__cause__, current.__context__])
     for current in chain:
+        if isinstance(current, (CertificateVerifyError, ssl.SSLCertVerificationError)):
+            return "SOURCE_TLS_ERROR"
         if isinstance(current, ValueError) and str(current) in KNOWN_MEDIA_ERRORS:
             return str(current)
         if isinstance(current, UnsupportedError):
@@ -57,7 +63,7 @@ def media_error_code(error):
         message = str(getattr(current, "orig_msg", "")).lower()
         if any(part in message for part in ("drm protected", "drm-protected", "protected by drm")):
             return "DRM_UNSUPPORTED"
-        if any(part in message for part in ("confirm your age", "age restricted", "age-restricted")):
+        if any(part in message for part in ("confirm your age", "verify your age", "age verification", "age restricted", "age-restricted")):
             return "AGE_RESTRICTED"
         if any(part in message for part in ("captcha", "cloudflare", "not a bot", "access denied", "bot detection")):
             return "SOURCE_BLOCKED"
@@ -71,9 +77,15 @@ def media_error_code(error):
                 "private video",
                 "authentication required",
                 "only available for registered users",
+                "is locked",
+                "require login",
             )
         ):
             return "LOGIN_REQUIRED"
+        if any(part in message for part in ("paywall", "premium only", "premium-only", "subscription required", "purchase required")):
+            return "PAYWALL_RESTRICTED"
+        if any(part in message for part in ("too many requests", "rate limit")):
+            return "SOURCE_RATE_LIMITED"
         if any(part in message for part in ("not available in your country", "geo restricted", "geo-restricted")):
             return "REGION_RESTRICTED"
         if any(
